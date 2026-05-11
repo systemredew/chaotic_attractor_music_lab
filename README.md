@@ -18,7 +18,10 @@ Run the app, select a preset with `1`-`5`, and export the current session with `
 - Henon and Logistic discrete maps.
 - Logistic bifurcation sequencer where `r` moves from order toward chaos.
 - Realtime pygame visualization with projected 3D trajectories.
-- Mouse-driven pygame control panel for presets, transport, export, chaos mode, speed, and density.
+- Mouse-driven pygame control panel for presets, transport, export, chaos mode, speed, density, root note, scale, trail length, and camera settings.
+- Interactive pseudo-3D camera for all systems, including Henon and Logistic/Bifurcation embeddings: drag the scene to rotate, use the mouse wheel to zoom, or enable automatic camera rotation.
+- Resizable window and fullscreen mode.
+- Depth shading for 3D trails: nearby line segments are brighter and slightly thicker.
 - MIDI note mapping with major, minor, pentatonic, whole-tone, and chromatic scales.
 - Live MIDI output when a MIDI device is available.
 - pygame audio fallback when live MIDI is unavailable.
@@ -65,7 +68,7 @@ python -m pytest
 
 ## Controls
 
-All keyboard controls are also available in the bottom GUI panel. Use the `Simulation speed` slider to change integration steps per frame and the `Music density` slider to change note event density.
+All keyboard controls are also available in the translucent bottom GUI panel. Use the sliders to change simulation speed, music density, root note, chaos influence, trail length, zoom, and camera rotation. Drag the visual scene to rotate the 3D camera and use the mouse wheel to zoom.
 
 - `SPACE` pause or resume.
 - `R` reset current system.
@@ -80,7 +83,18 @@ All keyboard controls are also available in the bottom GUI panel. Use the `Simul
 - `UP` and `DOWN` change simulation speed.
 - `LEFT` and `RIGHT` change musical density.
 - `C` enable or disable chaos influence.
+- `F11` or `Alt+Enter` toggle fullscreen.
 - `ESC` exit.
+
+GUI-only controls:
+
+- `Scale` cycles through available musical scales.
+- `AutoCam` toggles automatic camera rotation.
+- `Root` changes the base MIDI note.
+- `Chaos influence` controls how strongly the Lyapunov estimate affects note density.
+- `Trail` changes the number of retained trajectory points.
+- `Zoom`, `Rot X`, and `Rot Y` adjust the pseudo-3D camera.
+- `Full` toggles fullscreen mode.
 
 ## Presets
 

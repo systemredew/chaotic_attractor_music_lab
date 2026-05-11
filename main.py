@@ -12,6 +12,7 @@ from math_core.lyapunov import LyapunovEstimator
 from math_core.vector_utils import acceleration, curvature, speed
 from music.mapper import MusicMapper
 from music.music_engine import MusicEngine
+from music.scales import SCALES
 from presets.presets import PRESETS, Preset
 from systems import HenonMap, LogisticMap, LorenzSystem, RosslerSystem
 from systems.base_system import BaseSystem
@@ -46,6 +47,8 @@ class ChaoticAttractorMusicLab:
         self.steps_per_frame = config.DEFAULT_STEPS_PER_FRAME
         self.density_multiplier = self.preset.note_density
         self.chaos_mode = True
+        self.chaos_influence = 1.0
+        self.auto_camera = False
         self.previous_point = None
         self.previous_speed = 0.0
         self.points_for_curvature = []
@@ -92,6 +95,10 @@ class ChaoticAttractorMusicLab:
                 steps_per_frame=self.steps_per_frame,
                 density_multiplier=self.density_multiplier,
                 preset_index=self.preset_index,
+                root_note=self.mapper.root_note,
+                chaos_influence=self.chaos_influence,
+                trail_limit=self.renderer.trail_limit,
+                auto_camera=self.auto_camera,
             )
             self.clock.tick(config.FPS)
         pygame.quit()
@@ -107,7 +114,8 @@ class ChaoticAttractorMusicLab:
                 self.system.set_state(rk4_step(self.system, self.system.current_point(), config.DEFAULT_DT))
                 point = self.system.current_point()
 
-            lyapunov_value = self.lyapunov.step() if self.chaos_mode else 0.0
+            lyapunov_raw = self.lyapunov.step() if self.chaos_mode else 0.0
+            lyapunov_value = lyapunov_raw * self.chaos_influence
             current_speed = speed(self.previous_point, point, config.DEFAULT_DT)
             current_acceleration = acceleration(self.previous_speed, current_speed, config.DEFAULT_DT)
             self.points_for_curvature.append(point.copy())
@@ -134,7 +142,9 @@ class ChaoticAttractorMusicLab:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-            elif event.type in {pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION}:
+            elif event.type == pygame.VIDEORESIZE:
+                self.renderer.resize(event.w, event.h)
+            elif event.type in {pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION, pygame.MOUSEWHEEL}:
                 action = self.renderer.handle_ui_event(event)
                 if action is not None:
                     self._handle_ui_action(*action)
@@ -159,12 +169,35 @@ class ChaoticAttractorMusicLab:
             save_logistic_bifurcation(Path(config.EXPORT_DIR) / config.BIFURCATION_IMAGE)
         elif action == "chaos":
             self.chaos_mode = not self.chaos_mode
+        elif action == "scale":
+            self._cycle_scale()
+        elif action == "auto_camera":
+            self.auto_camera = not self.auto_camera
+        elif action == "fullscreen":
+            self.renderer.toggle_fullscreen()
         elif action == "exit":
             self.running = False
         elif action == "speed" and value is not None:
             self.steps_per_frame = int(value)
         elif action == "density" and value is not None:
             self.density_multiplier = float(value)
+        elif action == "root_note" and value is not None:
+            self.mapper.root_note = int(value)
+        elif action == "chaos_influence" and value is not None:
+            self.chaos_influence = float(value)
+        elif action == "trail_limit" and value is not None:
+            self.renderer.set_trail_limit(int(value))
+        elif action == "camera_zoom" and value is not None:
+            self.renderer.camera.zoom = float(value)
+        elif action == "camera_rotation_x" and value is not None:
+            self.renderer.camera.rotation_x = float(value)
+        elif action == "camera_rotation_y" and value is not None:
+            self.renderer.camera.rotation_y = float(value)
+
+    def _cycle_scale(self) -> None:
+        names = list(SCALES)
+        current = names.index(self.mapper.scale_name) if self.mapper.scale_name in names else 0
+        self.mapper.scale_name = names[(current + 1) % len(names)]
 
     def _handle_key(self, key: int) -> None:
         if key == pygame.K_ESCAPE:
@@ -192,6 +225,8 @@ class ChaoticAttractorMusicLab:
             self.density_multiplier = max(config.MIN_DENSITY_MULTIPLIER, self.density_multiplier - 0.1)
         elif key == pygame.K_c:
             self.chaos_mode = not self.chaos_mode
+        elif key == pygame.K_F11 or (key == pygame.K_RETURN and pygame.key.get_mods() & pygame.KMOD_ALT):
+            self.renderer.toggle_fullscreen()
 
 
 def smoke_test() -> None:
