@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from pathlib import Path
+import math
+import time
+
+import numpy as np
+import pygame
+
+import config
+from music.mapper import NoteEvent
+from music.midi_exporter import MidiExporter
+
+
+class MusicEngine:
+    def __init__(self) -> None:
+        self.muted = False
+        self.last_note_time = 0.0
+        self.current_note: int | None = None
+        self.events: list[tuple[float, NoteEvent]] = []
+        self._midi_out = None
+        self._audio_ready = False
+        self.init_midi()
+        self._init_audio_fallback()
+
+    def init_midi(self) -> None:
+        try:
+            import mido
+
+            outputs = mido.get_output_names()
+            if outputs:
+                self._midi_out = mido.open_output(outputs[0])
+        except Exception:
+            self._midi_out = None
+
+    def _init_audio_fallback(self) -> None:
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
+            self._audio_ready = True
+        except Exception:
+            self._audio_ready = False
+
+    def play_note(self, event: NoteEvent, density_multiplier: float = 1.0) -> bool:
+        now = time.monotonic()
+        cooldown = np.interp(
+            np.clip(event.density * density_multiplier, 0.0, 1.0),
+            [0.0, 1.0],
+            [config.MAX_NOTE_COOLDOWN, config.MIN_NOTE_COOLDOWN],
+        )
+        if self.muted or now - self.last_note_time < cooldown:
+            return False
+        self.last_note_time = now
+        self.current_note = event.note
+        self.events.append((now, event))
+        if self._midi_out is not None:
+            self._play_midi(event)
+        elif self._audio_ready:
+            self._play_tone(event)
+        return True
+
+    def _play_midi(self, event: NoteEvent) -> None:
+        import mido
+
+        self._midi_out.send(mido.Message("note_on", note=event.note, velocity=event.velocity, channel=event.channel))
+        pygame.time.set_timer(pygame.USEREVENT + 1, int(event.duration * 1000), loops=1)
+
+    def note_off(self, note: int | None = None) -> None:
+        note = self.current_note if note is None else note
+        if note is None or self._midi_out is None:
+            return
+        import mido
+
+        self._midi_out.send(mido.Message("note_off", note=note, velocity=0, channel=config.DEFAULT_CHANNEL))
+
+    def _play_tone(self, event: NoteEvent) -> None:
+        frequency = 440.0 * (2.0 ** ((event.note - 69) / 12.0))
+        sample_rate = 44100
+        n_samples = max(1, int(sample_rate * event.duration))
+        t = np.linspace(0.0, event.duration, n_samples, False)
+        envelope = np.minimum(1.0, np.linspace(0.0, 12.0, n_samples)) * np.linspace(1.0, 0.0, n_samples)
+        wave = np.sin(2.0 * math.pi * frequency * t) * envelope * (event.velocity / 127.0)
+        sound = pygame.sndarray.make_sound((wave * 32767).astype(np.int16))
+        sound.play()
+
+    def mute(self) -> None:
+        self.muted = True
+        self.note_off()
+
+    def unmute(self) -> None:
+        self.muted = False
+
+    def toggle_mute(self) -> None:
+        self.unmute() if self.muted else self.mute()
+
+    def export_midi(self, filename: str | Path) -> Path:
+        exporter = MidiExporter()
+        return exporter.export(self.events, filename)
