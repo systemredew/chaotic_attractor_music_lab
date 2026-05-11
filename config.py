@@ -17,7 +17,7 @@ POINT_RADIUS = 3
 PULSE_DECAY = 0.84
 PULSE_RADIUS_BOOST = 18
 
-UI_PANEL_HEIGHT = 248
+UI_PANEL_HEIGHT = 342
 UI_MARGIN = 14
 UI_RADIUS = 6
 UI_BACKGROUND_COLOR = (13, 18, 27)
@@ -68,6 +68,23 @@ BIFURCATION_IMAGE = "bifurcation_logistic.png"
 
 EXPORT_DIR = "exports"
 DEFAULT_MIDI_FILE = "chaotic_attractor_session.mid"
+DEFAULT_SCREENSHOT_FILE = "chaotic_attractor_screenshot.png"
+APP_ID = "chaotic-attractor-music-lab"
+APP_ICON_PNG = "assets/app_icon.png"
+APP_ICON_ICO = "assets/app_icon.ico"
+
+MIN_BPM = 40
+MAX_BPM = 220
+MIN_NOTE_LENGTH_MULTIPLIER = 0.25
+MAX_NOTE_LENGTH_MULTIPLIER = 3.0
+MIN_OCTAVE_RANGE = 1
+MAX_OCTAVE_RANGE = 6
+MIN_NOTE_PROBABILITY = 0.05
+MAX_NOTE_PROBABILITY = 1.0
+MIN_SWING = 0.0
+MAX_SWING = 0.65
+
+VISUAL_STYLES = ["aurora", "ember", "ice", "mono"]
 
 
 @dataclass(frozen=True)
@@ -85,4 +102,25 @@ SYSTEM_BOUNDS: dict[str, ViewBounds] = {
     "Rossler": ViewBounds(-15.0, 15.0, -15.0, 15.0, 0.0, 30.0),
     "Henon": ViewBounds(-1.6, 1.6, -0.5, 0.5),
     "Logistic": ViewBounds(2.5, 4.0, 0.0, 1.0),
+}
+
+SYSTEM_PARAMETER_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+    "Lorenz": {
+        "sigma": (1.0, 30.0),
+        "rho": (1.0, 60.0),
+        "beta": (0.5, 8.0),
+    },
+    "Rossler": {
+        "a": (0.01, 1.0),
+        "b": (0.01, 1.0),
+        "c": (1.0, 14.0),
+    },
+    "Henon": {
+        "a": (0.5, 1.6),
+        "b": (0.05, 0.45),
+    },
+    "Logistic": {
+        "r": (2.5, 4.0),
+        "r_step": (0.00005, 0.004),
+    },
 }

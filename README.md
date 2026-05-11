@@ -18,10 +18,14 @@ Run the app, select a preset with `1`-`5`, and export the current session with `
 - Henon and Logistic discrete maps.
 - Logistic bifurcation sequencer where `r` moves from order toward chaos.
 - Realtime pygame visualization with projected 3D trajectories.
-- Mouse-driven pygame control panel for presets, transport, export, chaos mode, speed, density, root note, scale, trail length, and camera settings.
+- Mouse-driven pygame control panel for presets, transport, export, chaos mode, speed, density, root note, scale, trail length, and system parameters.
 - Interactive pseudo-3D camera for all systems, including Henon and Logistic/Bifurcation embeddings: drag the scene to rotate, use the mouse wheel to zoom, or enable automatic camera rotation.
 - Resizable window and fullscreen mode.
-- Depth shading for 3D trails: nearby line segments are brighter and slightly thicker.
+- Performance mode hides the control panel and leaves a clean stage view.
+- Multi-voice music mode adds bass, harmony, or percussion layers depending on the selected system.
+- System parameter sliders let you reshape Lorenz, Rossler, Henon, and Logistic behavior during runtime.
+- Screenshot export.
+- Depth shading for 3D trails.
 - MIDI note mapping with major, minor, pentatonic, whole-tone, and chromatic scales.
 - Live MIDI output when a MIDI device is available.
 - pygame audio fallback when live MIDI is unavailable.
@@ -68,7 +72,7 @@ python -m pytest
 
 ## Controls
 
-All keyboard controls are also available in the translucent bottom GUI panel. Use the sliders to change simulation speed, music density, root note, chaos influence, trail length, zoom, and camera rotation. Drag the visual scene to rotate the 3D camera and use the mouse wheel to zoom.
+Most keyboard controls are also available in the translucent bottom GUI panel. Use the sliders to change simulation speed, music density, root note, chaos influence, trail length, musical timing, and system parameters. Drag the visual scene to rotate the 3D camera and use the mouse wheel to zoom.
 
 - `SPACE` pause or resume.
 - `R` reset current system.
@@ -90,11 +94,16 @@ GUI-only controls:
 
 - `Scale` cycles through available musical scales.
 - `AutoCam` toggles automatic camera rotation.
+- `Style` cycles visual palettes.
+- `Voice` toggles multi-voice music mapping.
+- `Perf` toggles performance mode.
+- `Shot` saves a screenshot to `exports/`.
+- `Default` restores the current preset and global controls to default values.
 - `Root` changes the base MIDI note.
 - `Chaos influence` controls how strongly the Lyapunov estimate affects note density.
 - `Trail` changes the number of retained trajectory points.
-- `Zoom`, `Rot X`, and `Rot Y` adjust the pseudo-3D camera.
-- `Full` toggles fullscreen mode.
+- `BPM`, `Length`, `Octaves`, `Probability`, and `Swing` shape the generated music.
+- Dynamic parameter sliders edit the active system parameters, such as Lorenz `sigma/rho/beta` or Rossler `a/b/c`.
 
 ## Presets
 

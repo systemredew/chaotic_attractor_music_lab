@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 from pathlib import Path
 
 import pygame
@@ -19,6 +20,13 @@ from systems.base_system import BaseSystem
 from visual.renderer import Renderer
 
 
+def configure_windows_app_identity() -> None:
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(config.APP_ID)
+    except (AttributeError, OSError):
+        pass
+
+
 def create_system(preset: Preset) -> BaseSystem:
     if preset.system == "Lorenz":
         return LorenzSystem(**preset.parameters)
@@ -33,6 +41,7 @@ def create_system(preset: Preset) -> BaseSystem:
 
 class ChaoticAttractorMusicLab:
     def __init__(self, preset_index: int = 1) -> None:
+        configure_windows_app_identity()
         pygame.init()
         self.clock = pygame.time.Clock()
         self.renderer = Renderer()
@@ -49,6 +58,7 @@ class ChaoticAttractorMusicLab:
         self.chaos_mode = True
         self.chaos_influence = 1.0
         self.auto_camera = False
+        self.performance_mode = False
         self.previous_point = None
         self.previous_speed = 0.0
         self.points_for_curvature = []
@@ -69,6 +79,37 @@ class ChaoticAttractorMusicLab:
 
     def reset(self) -> None:
         self.system.reset()
+        self.lyapunov = LyapunovEstimator(self.system)
+        self.renderer.reset_trail()
+        self.previous_point = None
+        self.previous_speed = 0.0
+        self.points_for_curvature = []
+        self.simulation_credit = 0.0
+
+    def reset_defaults(self) -> None:
+        self.preset = PRESETS[self.preset_index]
+        self.system = create_system(self.preset)
+        self.mapper.scale_name = self.preset.scale
+        self.mapper.root_note = config.DEFAULT_ROOT_NOTE
+        self.mapper.bpm = config.DEFAULT_TEMPO_BPM
+        self.mapper.note_length_multiplier = 1.0
+        self.mapper.octave_range = 4
+        self.mapper.note_probability = 1.0
+        self.mapper.swing = 0.0
+        self.mapper.multi_voice = True
+        self.music.tempo_bpm = config.DEFAULT_TEMPO_BPM
+        self.steps_per_frame = config.DEFAULT_STEPS_PER_FRAME
+        self.density_multiplier = self.preset.note_density
+        self.chaos_mode = True
+        self.chaos_influence = 1.0
+        self.auto_camera = False
+        self.performance_mode = False
+        self.renderer.performance_mode = False
+        self.renderer.visual_style = config.VISUAL_STYLES[0]
+        self.renderer.camera.rotation_x = 0.65
+        self.renderer.camera.rotation_y = -0.55
+        self.renderer.camera.zoom = 9.6
+        self.renderer.set_trail_limit(config.TRAIL_LIMIT)
         self.lyapunov = LyapunovEstimator(self.system)
         self.renderer.reset_trail()
         self.previous_point = None
@@ -99,6 +140,14 @@ class ChaoticAttractorMusicLab:
                 chaos_influence=self.chaos_influence,
                 trail_limit=self.renderer.trail_limit,
                 auto_camera=self.auto_camera,
+                performance_mode=self.performance_mode,
+                bpm=self.mapper.bpm,
+                note_length_multiplier=self.mapper.note_length_multiplier,
+                octave_range=self.mapper.octave_range,
+                note_probability=self.mapper.note_probability,
+                swing=self.mapper.swing,
+                multi_voice=self.mapper.multi_voice,
+                parameter_values=self._control_parameters(),
             )
             self.clock.tick(config.FPS)
         pygame.quit()
@@ -124,7 +173,7 @@ class ChaoticAttractorMusicLab:
             if len(self.points_for_curvature) == 3:
                 current_curvature = curvature(*self.points_for_curvature)
 
-            note = self.mapper.state_to_note(
+            events = self.mapper.state_to_events(
                 point,
                 self.system.name,
                 lyapunov_value,
@@ -132,7 +181,7 @@ class ChaoticAttractorMusicLab:
                 acceleration=current_acceleration,
                 curvature=current_curvature,
             )
-            if self.music.play_note(note, self.density_multiplier):
+            if self.music.play_events(events, self.density_multiplier):
                 self.renderer.trigger_note_pulse()
             self.renderer.append_point(point, current_speed, lyapunov_value)
             self.previous_point = point.copy()
@@ -160,11 +209,14 @@ class ChaoticAttractorMusicLab:
             self.paused = not self.paused
         elif action == "reset":
             self.reset()
-        elif action == "mute":
-            self.music.toggle_mute()
+        elif action == "defaults":
+            self.reset_defaults()
         elif action == "save_midi":
             output = Path(config.EXPORT_DIR) / config.DEFAULT_MIDI_FILE
             self.music.export_midi(output)
+        elif action == "screenshot":
+            output = Path(config.EXPORT_DIR) / config.DEFAULT_SCREENSHOT_FILE
+            self.renderer.save_screenshot(output)
         elif action == "bifurcation":
             save_logistic_bifurcation(Path(config.EXPORT_DIR) / config.BIFURCATION_IMAGE)
         elif action == "chaos":
@@ -173,10 +225,13 @@ class ChaoticAttractorMusicLab:
             self._cycle_scale()
         elif action == "auto_camera":
             self.auto_camera = not self.auto_camera
-        elif action == "fullscreen":
-            self.renderer.toggle_fullscreen()
-        elif action == "exit":
-            self.running = False
+        elif action == "visual_style":
+            self.renderer.cycle_visual_style()
+        elif action == "multi_voice":
+            self.mapper.multi_voice = not self.mapper.multi_voice
+        elif action == "performance":
+            self.performance_mode = not self.performance_mode
+            self.renderer.performance_mode = self.performance_mode
         elif action == "speed" and value is not None:
             self.steps_per_frame = int(value)
         elif action == "density" and value is not None:
@@ -187,12 +242,19 @@ class ChaoticAttractorMusicLab:
             self.chaos_influence = float(value)
         elif action == "trail_limit" and value is not None:
             self.renderer.set_trail_limit(int(value))
-        elif action == "camera_zoom" and value is not None:
-            self.renderer.camera.zoom = float(value)
-        elif action == "camera_rotation_x" and value is not None:
-            self.renderer.camera.rotation_x = float(value)
-        elif action == "camera_rotation_y" and value is not None:
-            self.renderer.camera.rotation_y = float(value)
+        elif action == "bpm" and value is not None:
+            self.mapper.bpm = int(value)
+            self.music.tempo_bpm = int(value)
+        elif action == "note_length" and value is not None:
+            self.mapper.note_length_multiplier = float(value)
+        elif action == "octave_range" and value is not None:
+            self.mapper.octave_range = int(value)
+        elif action == "note_probability" and value is not None:
+            self.mapper.note_probability = float(value)
+        elif action == "swing" and value is not None:
+            self.mapper.swing = float(value)
+        elif action.startswith("parameter:") and value is not None:
+            self._set_parameter_by_index(int(action.split(":", maxsplit=1)[1]), float(value))
 
     def _cycle_scale(self) -> None:
         names = list(SCALES)
@@ -227,6 +289,28 @@ class ChaoticAttractorMusicLab:
             self.chaos_mode = not self.chaos_mode
         elif key == pygame.K_F11 or (key == pygame.K_RETURN and pygame.key.get_mods() & pygame.KMOD_ALT):
             self.renderer.toggle_fullscreen()
+        elif key == pygame.K_TAB:
+            self.performance_mode = not self.performance_mode
+            self.renderer.performance_mode = self.performance_mode
+        elif key == pygame.K_F12:
+            self.renderer.save_screenshot(Path(config.EXPORT_DIR) / config.DEFAULT_SCREENSHOT_FILE)
+
+    def _control_parameters(self) -> dict[str, float]:
+        values = dict(self.system.parameters)
+        if hasattr(self.system, "r_step"):
+            values["r_step"] = float(self.system.r_step)  # type: ignore[attr-defined]
+        return values
+
+    def _set_parameter_by_index(self, index: int, value: float) -> None:
+        names = list(self._control_parameters())
+        if index >= len(names):
+            return
+        name = names[index]
+        setattr(self.system, name, value)
+        if name in self.system.parameters:
+            self.system.parameters[name] = value
+        if self.system.name == "Logistic" and name == "r":
+            self.system.parameters["r"] = value
 
 
 def smoke_test() -> None:

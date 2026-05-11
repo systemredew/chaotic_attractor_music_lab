@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import pygame
@@ -19,6 +20,7 @@ class Renderer:
         self.height = height
         self.windowed_size = (width, height)
         self.fullscreen = False
+        self._set_window_icon()
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         pygame.display.set_caption("Chaotic Attractor Music Lab")
         self.visual_rect = pygame.Rect(0, 0, width, height)
@@ -29,6 +31,17 @@ class Renderer:
         self.pulse_power = 0.0
         self.dragging_camera = False
         self.trail_limit = config.TRAIL_LIMIT
+        self.performance_mode = False
+        self.visual_style = config.VISUAL_STYLES[0]
+
+    def _set_window_icon(self) -> None:
+        icon_path = Path(__file__).resolve().parents[1] / config.APP_ICON_PNG
+        if not icon_path.exists():
+            return
+        try:
+            pygame.display.set_icon(pygame.image.load(str(icon_path)))
+        except pygame.error:
+            return
 
     def resize(self, width: int, height: int) -> None:
         self.width = max(config.MIN_WINDOW_WIDTH, width)
@@ -54,6 +67,16 @@ class Renderer:
         self.camera.height = self.height
         self.controls.resize(self.width, self.height)
 
+    def save_screenshot(self, filename: str | Path) -> Path:
+        output = Path(filename)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        pygame.image.save(self.screen, output)
+        return output
+
+    def cycle_visual_style(self) -> None:
+        index = config.VISUAL_STYLES.index(self.visual_style) if self.visual_style in config.VISUAL_STYLES else 0
+        self.visual_style = config.VISUAL_STYLES[(index + 1) % len(config.VISUAL_STYLES)]
+
     def reset_trail(self) -> None:
         self.trail.clear()
 
@@ -71,9 +94,10 @@ class Renderer:
         self.pulse_power = 1.0
 
     def handle_ui_event(self, event: pygame.event.Event) -> tuple[str, float | None] | None:
-        action = self.controls.handle_event(event)
-        if action is not None:
-            return action
+        if not self.performance_mode:
+            action = self.controls.handle_event(event)
+            if action is not None:
+                return action
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.visual_rect.collidepoint(event.pos):
             self.dragging_camera = True
@@ -85,7 +109,7 @@ class Renderer:
             return "camera_drag", None
         elif event.type == pygame.MOUSEWHEEL and self.visual_rect.collidepoint(pygame.mouse.get_pos()):
             self.camera.adjust_zoom(event.y * 0.8)
-            return "camera_zoom", self.camera.zoom
+            return None
         return None
 
     def render(
@@ -107,7 +131,16 @@ class Renderer:
         chaos_influence: float,
         trail_limit: int,
         auto_camera: bool,
+        performance_mode: bool,
+        bpm: int,
+        note_length_multiplier: float,
+        octave_range: int,
+        note_probability: float,
+        swing: float,
+        multi_voice: bool,
+        parameter_values: dict[str, float],
     ) -> None:
+        self.performance_mode = performance_mode
         self.screen.fill(config.BACKGROUND_COLOR)
         pygame.draw.rect(self.screen, config.BACKGROUND_COLOR, self.visual_rect)
         if auto_camera:
@@ -125,13 +158,15 @@ class Renderer:
             f"lyapunov: {lyapunov:+.4f} | scale: {scale_name} | note: {current_note or '-'} | fps: {fps:.1f}",
             f"speed: {steps_per_frame} | density: {density_multiplier:.2f} | root: {root_note} | chaos influence: {chaos_influence:.2f} | trail: {trail_limit}",
         ]
-        self.overlay.draw(self.screen, lines)
+        if performance_mode:
+            self.overlay.draw(self.screen, lines[:2])
+        else:
+            self.overlay.draw(self.screen, lines)
         self.controls.draw(
             self.screen,
             UIState(
                 preset_index=preset_index,
                 paused=paused,
-                muted=muted,
                 chaos_mode=chaos_mode,
                 steps_per_frame=steps_per_frame,
                 density_multiplier=density_multiplier,
@@ -139,10 +174,17 @@ class Renderer:
                 chaos_influence=chaos_influence,
                 trail_limit=trail_limit,
                 scale_name=scale_name,
-                camera_rotation_x=self.camera.rotation_x,
-                camera_rotation_y=self.camera.rotation_y,
-                camera_zoom=self.camera.zoom,
                 auto_camera=auto_camera,
+                performance_mode=performance_mode,
+                visual_style=self.visual_style,
+                bpm=bpm,
+                note_length_multiplier=note_length_multiplier,
+                octave_range=octave_range,
+                note_probability=note_probability,
+                swing=swing,
+                multi_voice=multi_voice,
+                system_name=system_name,
+                parameter_values=parameter_values,
             ),
         )
         self.pulse_power *= config.PULSE_DECAY
@@ -150,17 +192,14 @@ class Renderer:
 
     def _draw_3d_trail(self, system_name: str) -> None:
         previous: tuple[int, int] | None = None
-        previous_depth = 0.0
         for point, point_speed, chaos in self.trail:
             projected_point = self._point_to_3d(point, system_name)
             x, y, depth = self.camera.project_with_depth(projected_point)
             projected = (x, y)
             color = self._shade_depth(speed_color(point_speed, chaos), depth)
             if previous is not None:
-                thickness = 1 + int(self._depth_factor((previous_depth + depth) * 0.5) > 0.72)
-                pygame.draw.line(self.screen, color, previous, projected, thickness)
+                pygame.draw.line(self.screen, color, previous, projected, 1)
             previous = projected
-            previous_depth = depth
         if previous is not None:
             self._draw_current_point(previous)
 
@@ -201,4 +240,16 @@ class Renderer:
 
     def _shade_depth(self, color: tuple[int, int, int], depth: float) -> tuple[int, int, int]:
         factor = self._depth_factor(depth)
-        return tuple(int(np.clip(channel * factor + 10 * (1.0 - factor), 0, 255)) for channel in color)
+        styled = self._style_color(color)
+        return tuple(int(np.clip(channel * factor + 10 * (1.0 - factor), 0, 255)) for channel in styled)
+
+    def _style_color(self, color: tuple[int, int, int]) -> tuple[int, int, int]:
+        red, green, blue = color
+        if self.visual_style == "ember":
+            return min(255, red + 45), max(40, green - 20), max(35, blue - 70)
+        if self.visual_style == "ice":
+            return max(40, red - 60), min(255, green + 20), min(255, blue + 50)
+        if self.visual_style == "mono":
+            value = int((red + green + blue) / 3)
+            return value, value, value
+        return color

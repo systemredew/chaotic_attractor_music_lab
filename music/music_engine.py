@@ -17,7 +17,9 @@ class MusicEngine:
         self.muted = False
         self.last_note_time = 0.0
         self.current_note: int | None = None
+        self.current_notes: list[int] = []
         self.events: list[tuple[float, NoteEvent]] = []
+        self.tempo_bpm = config.DEFAULT_TEMPO_BPM
         self._midi_out = None
         self._audio_ready = False
         self.init_midi()
@@ -52,11 +54,35 @@ class MusicEngine:
             return False
         self.last_note_time = now
         self.current_note = event.note
+        self.current_notes = [event.note]
         self.events.append((now, event))
         if self._midi_out is not None:
             self._play_midi(event)
         elif self._audio_ready:
             self._play_tone(event)
+        return True
+
+    def play_events(self, events: list[NoteEvent], density_multiplier: float = 1.0) -> bool:
+        if not events:
+            return False
+        now = time.monotonic()
+        gate_event = max(events, key=lambda event: event.density)
+        cooldown = np.interp(
+            np.clip(gate_event.density * density_multiplier, 0.0, 1.0),
+            [0.0, 1.0],
+            [config.MAX_NOTE_COOLDOWN, config.MIN_NOTE_COOLDOWN],
+        )
+        if self.muted or now - self.last_note_time < cooldown:
+            return False
+        self.last_note_time = now
+        self.current_note = events[0].note
+        self.current_notes = [event.note for event in events]
+        for event in events:
+            self.events.append((now, event))
+            if self._midi_out is not None:
+                self._play_midi(event)
+            elif self._audio_ready:
+                self._play_tone(event)
         return True
 
     def _play_midi(self, event: NoteEvent) -> None:
@@ -66,12 +92,13 @@ class MusicEngine:
         pygame.time.set_timer(pygame.USEREVENT + 1, int(event.duration * 1000), loops=1)
 
     def note_off(self, note: int | None = None) -> None:
-        note = self.current_note if note is None else note
-        if note is None or self._midi_out is None:
+        notes = self.current_notes if note is None else [note]
+        if not notes or self._midi_out is None:
             return
         import mido
 
-        self._midi_out.send(mido.Message("note_off", note=note, velocity=0, channel=config.DEFAULT_CHANNEL))
+        for current in notes:
+            self._midi_out.send(mido.Message("note_off", note=current, velocity=0, channel=config.DEFAULT_CHANNEL))
 
     def _play_tone(self, event: NoteEvent) -> None:
         frequency = 440.0 * (2.0 ** ((event.note - 69) / 12.0))
@@ -94,5 +121,5 @@ class MusicEngine:
         self.unmute() if self.muted else self.mute()
 
     def export_midi(self, filename: str | Path) -> Path:
-        exporter = MidiExporter()
+        exporter = MidiExporter(self.tempo_bpm)
         return exporter.export(self.events, filename)

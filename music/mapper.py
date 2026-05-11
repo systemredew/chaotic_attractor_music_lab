@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import random
 
 import numpy as np
 
@@ -22,6 +23,13 @@ class MusicMapper:
     def __init__(self, root_note: int = config.DEFAULT_ROOT_NOTE, scale_name: str = "minor_pentatonic") -> None:
         self.root_note = root_note
         self.scale_name = scale_name
+        self.bpm = config.DEFAULT_TEMPO_BPM
+        self.note_length_multiplier = 1.0
+        self.octave_range = 4
+        self.note_probability = 1.0
+        self.swing = 0.0
+        self.multi_voice = True
+        self._event_counter = 0
 
     @property
     def scale(self) -> list[int]:
@@ -32,11 +40,12 @@ class MusicMapper:
             return 0.0
         return float(np.clip((value - min_value) / (max_value - min_value), 0.0, 1.0))
 
-    def map_to_scale(self, value: float, root: int | None = None, scale: list[int] | None = None, octaves: int = 4) -> int:
+    def map_to_scale(self, value: float, root: int | None = None, scale: list[int] | None = None, octaves: int | None = None) -> int:
         selected_scale = scale or self.scale
         root_note = self.root_note if root is None else root
+        selected_octaves = self.octave_range if octaves is None else octaves
         value = float(np.clip(value, 0.0, 1.0))
-        degree = int(value * (len(selected_scale) * octaves - 1))
+        degree = int(value * (len(selected_scale) * selected_octaves - 1))
         octave, scale_index = divmod(degree, len(selected_scale))
         return int(np.clip(root_note + octave * 12 + selected_scale[scale_index], 0, 127))
 
@@ -74,7 +83,7 @@ class MusicMapper:
         velocity = self.speed_to_velocity(speed) + int(volume_value * 28) + int(min(acceleration, 180.0) / 180.0 * 18)
         velocity = int(np.clip(velocity, 28, 124))
         density = self.chaos_to_density(lyapunov_value) + min(curvature / np.pi, 1.0) * 0.15
-        duration = float(np.clip(config.DEFAULT_NOTE_DURATION * (1.4 - density), 0.06, 0.6))
+        duration = self._duration(float(np.clip(config.DEFAULT_NOTE_DURATION * (1.4 - density), 0.06, 0.6)))
         return NoteEvent(note=note, velocity=velocity, duration=duration, density=float(np.clip(density, 0.05, 1.0)))
 
     def speed_to_velocity(self, speed: float) -> int:
@@ -90,5 +99,41 @@ class MusicMapper:
         note = self.map_to_scale(float(np.clip(x, 0.0, 1.0)), scale=scale, octaves=5)
         velocity = int(np.clip(38 + tension * 70 + abs(x - 0.5) * 25, 25, 127))
         density = float(np.clip(0.15 + tension * 0.85, 0.1, 1.0))
-        subdivision = 0.5 if r < 3.0 else 0.33 if r < 3.55 else 0.16
+        subdivision = self._duration(0.5 if r < 3.0 else 0.33 if r < 3.55 else 0.16)
         return NoteEvent(note=note, velocity=velocity, duration=subdivision, density=density)
+
+    def state_to_events(
+        self,
+        state: Array,
+        system_name: str,
+        lyapunov_value: float,
+        speed: float = 0.0,
+        acceleration: float = 0.0,
+        curvature: float = 0.0,
+    ) -> list[NoteEvent]:
+        if random.random() > self.note_probability:
+            return []
+        lead = self.state_to_note(state, system_name, lyapunov_value, speed, acceleration, curvature)
+        self._event_counter += 1
+        if self.swing > 0.0 and self._event_counter % 2 == 0:
+            lead = NoteEvent(lead.note, lead.velocity, lead.duration * (1.0 + self.swing * 0.5), lead.density, lead.channel)
+        if not self.multi_voice:
+            return [lead]
+
+        events = [lead]
+        if system_name == "Rossler":
+            bass = NoteEvent(max(0, lead.note - 24), max(22, lead.velocity - 36), lead.duration * 2.6, max(0.05, lead.density * 0.35), 1)
+            events.append(bass)
+        elif system_name == "Henon":
+            perc_note = 36 + (lead.note % 12)
+            events.append(NoteEvent(perc_note, min(127, lead.velocity + 12), max(0.035, lead.duration * 0.35), min(1.0, lead.density + 0.2), 9))
+        elif lyapunov_value > 0.35:
+            interval = 7 if curvature < 1.2 else 10
+            harmony = NoteEvent(min(127, lead.note + interval), max(24, lead.velocity - 24), lead.duration * 1.35, lead.density * 0.55, 2)
+            events.append(harmony)
+        return events
+
+    def _duration(self, duration: float) -> float:
+        beat_seconds = 60.0 / max(config.MIN_BPM, self.bpm)
+        scaled = duration * self.note_length_multiplier
+        return float(np.clip(scaled, beat_seconds * 0.08, beat_seconds * 2.0))
