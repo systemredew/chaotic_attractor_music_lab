@@ -95,12 +95,12 @@ GUI-only controls:
 - `Auto Cam` toggles automatic camera rotation.
 - `Style` cycles visual palettes.
 - `Voice` toggles multi-voice music mapping.
-- `Perf` toggles performance mode.
+- `Hide` / `Show` hides or restores the bottom GUI panel.
 - `Default` restores the current preset and global controls to default values.
 - `Tone` changes the base MIDI note.
 - `Chaos influence` controls how strongly the Lyapunov estimate affects note density.
 - `Trail` changes the number of retained trajectory points.
-- `BPM`, `Length`, `Octaves`, `Probability`, and `Swing` shape the generated music.
+- `BPM`, `Length`, `Octaves`, `Probability`, `Swing`, and `Echo` shape the generated music.
 - Dynamic parameter sliders edit the active system parameters, such as Lorenz `sigma/rho/beta` or Rossler `a/b/c`.
 
 ## Presets

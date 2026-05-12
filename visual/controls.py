@@ -27,6 +27,7 @@ class UIState:
     octave_range: int
     note_probability: float
     swing: float
+    echo_amount: float
     multi_voice: bool
     system_name: str
     parameter_values: dict[str, float]
@@ -120,17 +121,17 @@ class Slider:
     def draw(self, surface: pygame.Surface, small_font: pygame.font.Font) -> None:
         value_text = f"{int(self.value)}" if self.integer else f"{self.value:.2f}"
         label = small_font.render(f"{self.label}: {value_text}", True, config.TEXT_COLOR)
-        label_rect = pygame.Rect(self.rect.left - 2, self.rect.top - 25, max(110, label.get_width() + 12), 19)
+        label_rect = pygame.Rect(self.rect.left - 2, self.rect.top, min(self.rect.width + 4, max(110, label.get_width() + 12)), 17)
         label_surface = pygame.Surface(label_rect.size, pygame.SRCALPHA)
         pygame.draw.rect(label_surface, (6, 10, 16, 155), label_surface.get_rect(), border_radius=4)
         surface.blit(label_surface, label_rect.topleft)
-        surface.blit(label, (label_rect.left + 6, label_rect.top + 1))
+        surface.blit(label, (label_rect.left + 6, label_rect.top))
 
-        track_y = self.rect.centery
+        track_y = self.rect.top + 22
         pygame.draw.line(surface, config.UI_BORDER_COLOR, (self.rect.left, track_y), (self.rect.right, track_y), 5)
         pygame.draw.line(surface, config.UI_ACCENT_COLOR, (self.rect.left, track_y), (self.knob_x(), track_y), 5)
-        pygame.draw.circle(surface, config.TEXT_COLOR, (self.knob_x(), track_y), 9)
-        pygame.draw.circle(surface, config.UI_ACCENT_COLOR, (self.knob_x(), track_y), 9, 1)
+        pygame.draw.circle(surface, config.TEXT_COLOR, (self.knob_x(), track_y), 8)
+        pygame.draw.circle(surface, config.UI_ACCENT_COLOR, (self.knob_x(), track_y), 8, 1)
 
 
 class ControlPanel:
@@ -141,6 +142,8 @@ class ControlPanel:
         self.small_font = pygame.font.SysFont("segoeui", 12)
         self.buttons: list[Button] = []
         self.sliders: list[Slider] = []
+        self.panel_toggle_button = Button(pygame.Rect(0, 0, 76, 30), "Panel", "toggle_panel")
+        self.panel_hidden = False
         self._build()
 
     def resize(self, width: int, height: int) -> None:
@@ -156,6 +159,11 @@ class ControlPanel:
         y = panel_top + 40
         button_h = 28
         button_gap = 6
+        self.panel_toggle_button = Button(
+            pygame.Rect(edge, self.height - edge - 30, 76, 30),
+            "Panel",
+            "toggle_panel",
+        )
         preset_w = max(82, min(104, (self.width // 2 - inset * 2 - button_gap * 4) // 5))
         self.buttons = []
         preset_labels = ["Calm", "Butterfly", "Drone", "Henon", "Bifurcation"]
@@ -168,25 +176,27 @@ class ControlPanel:
         y2 = y
         transport_start = x2
         max_controls_right = self.width - edge - inset
+        controls_right = transport_start
+        controls_bottom = y2 + button_h
         for label, action, width in [
             ("", "pause", 46),
             ("", "reset", 46),
             ("Default", "defaults", 72),
             ("Rec", "save_midi", 62),
-            ("Bifurc.", "bifurcation", 74),
             ("Chaos", "chaos", 66),
             ("Scale", "scale", 88),
             ("Auto Cam", "auto_camera", 86),
             ("Style", "visual_style", 66),
             ("Voice", "multi_voice", 62),
-            ("Perf", "performance", 58),
         ]:
             if x2 + width > max_controls_right:
                 x2 = transport_start
                 y2 += button_h + 8
-            self.buttons.append(Button(pygame.Rect(x2, y2, width, button_h), label, action))
+            rect = pygame.Rect(x2, y2, width, button_h)
+            self.buttons.append(Button(rect, label, action))
+            controls_right = max(controls_right, rect.right)
+            controls_bottom = max(controls_bottom, rect.bottom)
             x2 += width + button_gap
-        transport_end = x2 - button_gap
 
         left_x = inset
         middle_x = max(390, self.width // 3 + 24)
@@ -201,27 +211,30 @@ class ControlPanel:
             pygame.Rect(right_x - 8, section_top, right_w + 16, section_height),
         ]
         self.section_titles = ["SYSTEM", "MUSIC", "VISUAL"]
+        self.top_section_titles = ["ATTRACTOR", "CONTROLS"]
+        y3 = section_top + 26
+        row_gap = 32
+        self.sliders = [
+            Slider(pygame.Rect(left_x, y3, column_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:0"),
+            Slider(pygame.Rect(left_x, y3 + row_gap, column_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:1"),
+            Slider(pygame.Rect(left_x, y3 + row_gap * 2, column_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:2"),
+            Slider(pygame.Rect(middle_x, y3, column_w, 28), "Tone", config.MIN_ROOT_NOTE, config.MAX_ROOT_NOTE, config.DEFAULT_ROOT_NOTE, "root_note", True),
+            Slider(pygame.Rect(middle_x, y3 + row_gap, column_w, 28), "Density", config.MIN_DENSITY_MULTIPLIER, config.MAX_DENSITY_MULTIPLIER, 1.0, "density"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 2, column_w, 28), "BPM", config.MIN_BPM, config.MAX_BPM, config.DEFAULT_TEMPO_BPM, "bpm", True),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 3, column_w, 28), "Length", config.MIN_NOTE_LENGTH_MULTIPLIER, config.MAX_NOTE_LENGTH_MULTIPLIER, 1.0, "note_length"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 4, column_w, 28), "Octaves", config.MIN_OCTAVE_RANGE, config.MAX_OCTAVE_RANGE, 4, "octave_range", True),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 5, column_w, 28), "Probability", config.MIN_NOTE_PROBABILITY, config.MAX_NOTE_PROBABILITY, 1.0, "note_probability"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 6, column_w, 28), "Swing", config.MIN_SWING, config.MAX_SWING, 0.0, "swing"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 7, column_w, 28), "Echo", config.MIN_ECHO, config.MAX_ECHO, 0.0, "echo"),
+            Slider(pygame.Rect(right_x, y3, right_w, 28), "Speed", config.MIN_STEPS_PER_FRAME, config.MAX_STEPS_PER_FRAME, config.DEFAULT_STEPS_PER_FRAME, "speed", True),
+            Slider(pygame.Rect(right_x, y3 + row_gap, right_w, 28), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
+            Slider(pygame.Rect(right_x, y3 + row_gap * 2, right_w, 28), "Chaos influence", config.MIN_CHAOS_INFLUENCE, config.MAX_CHAOS_INFLUENCE, 1.0, "chaos_influence"),
+        ]
+        control_left = transport_start - 8
+        control_width = min(self.width - edge - control_left - 8, max(160, controls_right - transport_start + 16))
         self.top_section_rects = [
             pygame.Rect(inset - 8, y - 18, attractor_end - inset + 16, button_h + 32),
-            pygame.Rect(transport_start - 8, y - 18, max(160, transport_end - transport_start + 16), (y2 - y) + button_h + 32),
-        ]
-        self.top_section_titles = ["ATTRACTOR", "CONTROLS"]
-        y3 = section_top + 48
-        row_gap = 30
-        self.sliders = [
-            Slider(pygame.Rect(left_x, y3, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:0"),
-            Slider(pygame.Rect(left_x, y3 + row_gap, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:1"),
-            Slider(pygame.Rect(left_x, y3 + row_gap * 2, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:2"),
-            Slider(pygame.Rect(middle_x, y3, column_w, 22), "Tone", config.MIN_ROOT_NOTE, config.MAX_ROOT_NOTE, config.DEFAULT_ROOT_NOTE, "root_note", True),
-            Slider(pygame.Rect(middle_x, y3 + row_gap, column_w, 22), "Density", config.MIN_DENSITY_MULTIPLIER, config.MAX_DENSITY_MULTIPLIER, 1.0, "density"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 2, column_w, 22), "BPM", config.MIN_BPM, config.MAX_BPM, config.DEFAULT_TEMPO_BPM, "bpm", True),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 3, column_w, 22), "Length", config.MIN_NOTE_LENGTH_MULTIPLIER, config.MAX_NOTE_LENGTH_MULTIPLIER, 1.0, "note_length"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 4, column_w, 22), "Octaves", config.MIN_OCTAVE_RANGE, config.MAX_OCTAVE_RANGE, 4, "octave_range", True),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 5, column_w, 22), "Probability", config.MIN_NOTE_PROBABILITY, config.MAX_NOTE_PROBABILITY, 1.0, "note_probability"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 6, column_w, 22), "Swing", config.MIN_SWING, config.MAX_SWING, 0.0, "swing"),
-            Slider(pygame.Rect(right_x, y3, right_w, 22), "Speed", config.MIN_STEPS_PER_FRAME, config.MAX_STEPS_PER_FRAME, config.DEFAULT_STEPS_PER_FRAME, "speed", True),
-            Slider(pygame.Rect(right_x, y3 + row_gap, right_w, 22), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
-            Slider(pygame.Rect(right_x, y3 + row_gap * 2, right_w, 22), "Chaos influence", config.MIN_CHAOS_INFLUENCE, config.MAX_CHAOS_INFLUENCE, 1.0, "chaos_influence"),
+            pygame.Rect(control_left, y - 18, control_width, controls_bottom - y + 32),
         ]
 
     def sync(self, state: UIState) -> None:
@@ -236,12 +249,12 @@ class ControlPanel:
                 button.label = f"Scale: {self._short_scale(state.scale_name)}"
             elif button.action == "auto_camera":
                 button.active = state.auto_camera
-            elif button.action == "performance":
-                button.active = state.performance_mode
             elif button.action == "visual_style":
                 button.label = f"Style: {state.visual_style}"
             elif button.action == "multi_voice":
                 button.active = state.multi_voice
+        self.panel_toggle_button.active = state.performance_mode
+        self.panel_toggle_button.label = "Show" if state.performance_mode else "Hide"
 
         parameter_items = list(state.parameter_values.items())
         for slider in self.sliders:
@@ -265,6 +278,8 @@ class ControlPanel:
                 slider.value = state.note_probability
             elif slider.action == "swing":
                 slider.value = state.swing
+            elif slider.action == "echo":
+                slider.value = state.echo_amount
             elif slider.action.startswith("parameter:"):
                 index = int(slider.action.split(":", maxsplit=1)[1])
                 if index < len(parameter_items):
@@ -282,7 +297,11 @@ class ControlPanel:
 
     def draw(self, surface: pygame.Surface, state: UIState) -> None:
         self.sync(state)
+        self.panel_hidden = state.performance_mode
+        mouse_pos = pygame.mouse.get_pos()
         if state.performance_mode:
+            self.panel_toggle_button.draw(surface, self.font, mouse_pos)
+            self._draw_tooltip(surface, mouse_pos)
             return
         edge = config.UI_EDGE_MARGIN
         panel_rect = pygame.Rect(edge, self.height - config.UI_PANEL_HEIGHT + edge, self.width - edge * 2, config.UI_PANEL_HEIGHT - edge * 2)
@@ -292,15 +311,19 @@ class ControlPanel:
         pygame.draw.rect(surface, config.UI_BORDER_COLOR, panel_rect, 1, border_radius=config.UI_RADIUS)
         self._draw_sections(surface)
         self._draw_top_sections(surface)
-        mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
             button.draw(surface, self.font, mouse_pos)
         for slider in self.sliders:
             slider.draw(surface, self.small_font)
+        self.panel_toggle_button.draw(surface, self.font, mouse_pos)
         self._draw_tooltip(surface, mouse_pos)
 
     def handle_event(self, event: pygame.event.Event) -> tuple[str, float | None] | None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.panel_toggle_button.rect.collidepoint(event.pos):
+                return self.panel_toggle_button.action, None
+            if self.panel_hidden:
+                return None
             for button in self.buttons:
                 if button.rect.collidepoint(event.pos):
                     return button.action, None
@@ -310,6 +333,8 @@ class ControlPanel:
                     return slider.action, slider.set_value_from_pos(event.pos[0])
 
         if event.type == pygame.MOUSEMOTION:
+            if self.panel_hidden:
+                return None
             for slider in self.sliders:
                 if slider.dragging:
                     return slider.action, slider.set_value_from_pos(event.pos[0])
@@ -360,9 +385,15 @@ class ControlPanel:
         surface.blit(rendered, (rect.left + padding, rect.top + 5))
 
     def _tooltip_text(self, mouse_pos: tuple[int, int]) -> str | None:
+        if self.panel_hidden:
+            if self.panel_toggle_button.rect.collidepoint(mouse_pos):
+                return self._button_tooltips().get(self.panel_toggle_button.action)
+            return None
         for button in self.buttons:
             if button.rect.collidepoint(mouse_pos):
                 return self._button_tooltips().get(button.action)
+        if self.panel_toggle_button.rect.collidepoint(mouse_pos):
+            return self._button_tooltips().get(self.panel_toggle_button.action)
         for slider in self.sliders:
             if slider.rect.inflate(0, 24).collidepoint(mouse_pos):
                 if slider.action.startswith("parameter:"):
@@ -376,13 +407,12 @@ class ControlPanel:
             "reset": "Restart current trajectory",
             "defaults": "Restore current preset defaults",
             "save_midi": "Record/export generated notes to MIDI",
-            "bifurcation": "Save Logistic bifurcation diagram",
             "chaos": "Toggle Lyapunov chaos influence",
             "scale": "Cycle musical scale",
             "auto_camera": "Rotate camera automatically",
             "visual_style": "Cycle color palette",
             "multi_voice": "Toggle extra musical voices",
-            "performance": "Hide GUI for performance view",
+            "toggle_panel": "Show or hide the lower control panel",
         }
 
     def _slider_tooltips(self) -> dict[str, str]:
@@ -394,6 +424,7 @@ class ControlPanel:
             "octave_range": "Pitch range in octaves",
             "note_probability": "Chance that a generated note is played",
             "swing": "Offsets/lengthens every second note",
+            "echo": "Adds delayed repeats to generated sound",
             "speed": "Simulation steps per frame",
             "trail_limit": "Number of trajectory points on screen",
             "chaos_influence": "How strongly chaos affects music density",

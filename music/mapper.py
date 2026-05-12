@@ -66,15 +66,15 @@ class MusicMapper:
 
         if system_name == "Lorenz":
             pitch_value = self.normalize(x, -30.0, 30.0)
-            fuzz_value = self.normalize(abs(y), 0.0, 35.0)
+            fuzz_value = min(1.0, self.normalize(abs(y), 0.0, 35.0) * 2.2)
             octave_shift = round(self.normalize(z, 0.0, 55.0) * 12)
         elif system_name == "Rossler":
             pitch_value = self.normalize(x, -15.0, 15.0)
-            fuzz_value = self.normalize(abs(y), 0.0, 15.0)
+            fuzz_value = min(1.0, self.normalize(abs(y), 0.0, 15.0) * 2.2)
             octave_shift = round(self.normalize(z, 0.0, 30.0) * 7)
         elif system_name == "Henon":
             pitch_value = self.normalize(x, -1.5, 1.5)
-            fuzz_value = self.normalize(abs(y), 0.0, 0.45)
+            fuzz_value = min(1.0, self.normalize(abs(y), 0.0, 0.45) * 2.4)
             octave_shift = 0
         else:
             return self.logistic_to_note(float(values[1] if values.size > 1 else values[0]), float(values[0] if values.size > 1 else 3.7))
@@ -101,7 +101,7 @@ class MusicMapper:
         velocity = int(np.clip(38 + tension * 70 + abs(x - 0.5) * 25, 25, 127))
         density = float(np.clip(0.15 + tension * 0.85, 0.1, 1.0))
         subdivision = self._duration(0.5 if r < 3.0 else 0.33 if r < 3.55 else 0.16)
-        return NoteEvent(note=note, velocity=velocity, duration=subdivision, density=density, fuzz=abs(x - 0.5) * 2.0)
+        return NoteEvent(note=note, velocity=velocity, duration=subdivision, density=density, fuzz=min(1.0, abs(x - 0.5) * 3.0))
 
     def state_to_events(
         self,

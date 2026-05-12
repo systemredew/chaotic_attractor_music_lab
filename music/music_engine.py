@@ -20,6 +20,7 @@ class MusicEngine:
         self.current_notes: list[int] = []
         self.events: list[tuple[float, NoteEvent]] = []
         self.tempo_bpm = config.DEFAULT_TEMPO_BPM
+        self.echo_amount = 0.0
         self._midi_out = None
         self._audio_ready = False
         self.init_midi()
@@ -105,13 +106,30 @@ class MusicEngine:
     def _play_tone(self, event: NoteEvent) -> None:
         frequency = 440.0 * (2.0 ** ((event.note - 69) / 12.0))
         sample_rate = 44100
-        n_samples = max(1, int(sample_rate * event.duration))
-        t = np.linspace(0.0, event.duration, n_samples, False)
-        envelope = np.minimum(1.0, np.linspace(0.0, 12.0, n_samples)) * np.linspace(1.0, 0.0, n_samples)
-        wave = np.sin(2.0 * math.pi * frequency * t) * envelope * (event.velocity / 127.0)
+        base_samples = max(1, int(sample_rate * event.duration))
+        echo_tail = int(sample_rate * (0.28 + np.clip(self.echo_amount, 0.0, 1.0) * 0.45))
+        n_samples = base_samples + (echo_tail if self.echo_amount > 0.01 else 0)
+        t = np.linspace(0.0, event.duration, base_samples, False)
+        envelope = np.minimum(1.0, np.linspace(0.0, 12.0, base_samples)) * np.linspace(1.0, 0.0, base_samples)
+        base_wave = np.sin(2.0 * math.pi * frequency * t) * envelope * (event.velocity / 127.0)
+        wave = np.zeros(n_samples, dtype=np.float64)
+        wave[:base_samples] = base_wave
         if event.fuzz > 0.01:
-            drive = 1.0 + event.fuzz * 8.0
+            drive = 1.0 + event.fuzz * 18.0
             wave = np.tanh(wave * drive) / np.tanh(drive)
+        if self.echo_amount > 0.01:
+            delay = int(sample_rate * 0.14)
+            echo = np.zeros_like(wave)
+            if delay < n_samples:
+                feedback = np.clip(self.echo_amount, 0.0, 1.0) * 0.72
+                echo[delay:] += wave[:-delay] * feedback
+                second_delay = delay * 2
+                if second_delay < n_samples:
+                    echo[second_delay:] += wave[:-second_delay] * feedback * 0.52
+                third_delay = delay * 3
+                if third_delay < n_samples:
+                    echo[third_delay:] += wave[:-third_delay] * feedback * 0.28
+            wave = np.clip(wave + echo, -1.0, 1.0)
         sound = pygame.sndarray.make_sound((wave * 32767).astype(np.int16))
         sound.play()
 

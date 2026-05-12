@@ -98,6 +98,7 @@ class ChaoticAttractorMusicLab:
         self.mapper.swing = 0.0
         self.mapper.multi_voice = True
         self.music.tempo_bpm = config.DEFAULT_TEMPO_BPM
+        self.music.echo_amount = 0.0
         self.steps_per_frame = config.DEFAULT_STEPS_PER_FRAME
         self.density_multiplier = self.preset.note_density
         self.chaos_mode = True
@@ -148,6 +149,7 @@ class ChaoticAttractorMusicLab:
                 octave_range=self.mapper.octave_range,
                 note_probability=self.mapper.note_probability,
                 swing=self.mapper.swing,
+                echo_amount=self.music.echo_amount,
                 multi_voice=self.mapper.multi_voice,
                 parameter_values=self._control_parameters(),
             )
@@ -231,6 +233,9 @@ class ChaoticAttractorMusicLab:
             self.renderer.cycle_visual_style()
         elif action == "multi_voice":
             self.mapper.multi_voice = not self.mapper.multi_voice
+        elif action == "toggle_panel":
+            self.performance_mode = not self.performance_mode
+            self.renderer.performance_mode = self.performance_mode
         elif action == "performance":
             self.performance_mode = not self.performance_mode
             self.renderer.performance_mode = self.performance_mode
@@ -255,6 +260,8 @@ class ChaoticAttractorMusicLab:
             self.mapper.note_probability = float(value)
         elif action == "swing" and value is not None:
             self.mapper.swing = float(value)
+        elif action == "echo" and value is not None:
+            self.music.echo_amount = float(value)
         elif action.startswith("parameter:") and value is not None:
             self._set_parameter_by_index(int(action.split(":", maxsplit=1)[1]), float(value))
 

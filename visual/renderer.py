@@ -95,10 +95,10 @@ class Renderer:
         self.pulse_power = 1.0
 
     def handle_ui_event(self, event: pygame.event.Event) -> tuple[str, float | None] | None:
-        if not self.performance_mode:
-            action = self.controls.handle_event(event)
-            if action is not None:
-                return action
+        self.controls.panel_hidden = self.performance_mode
+        action = self.controls.handle_event(event)
+        if action is not None:
+            return action
 
         if event.type == pygame.MOUSEBUTTONDOWN and self.visual_rect.collidepoint(event.pos):
             if event.button == 1:
@@ -148,6 +148,7 @@ class Renderer:
         octave_range: int,
         note_probability: float,
         swing: float,
+        echo_amount: float,
         multi_voice: bool,
         parameter_values: dict[str, float],
     ) -> None:
@@ -189,6 +190,7 @@ class Renderer:
                 octave_range=octave_range,
                 note_probability=note_probability,
                 swing=swing,
+                echo_amount=echo_amount,
                 multi_voice=multi_voice,
                 system_name=system_name,
                 parameter_values=parameter_values,
