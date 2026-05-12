@@ -100,7 +100,7 @@ GUI-only controls:
 - `Tone` changes the base MIDI note.
 - `Chaos influence` controls how strongly the Lyapunov estimate affects note density.
 - `Trail` changes the number of retained trajectory points.
-- `BPM`, `Length`, `Octaves`, `Probability`, `Swing`, and `Echo` shape the generated music.
+- `BPM`, `Length`, `Octaves`, `Probability`, `Swing`, and `Fuzz` shape the generated music.
 - Dynamic parameter sliders edit the active system parameters, such as Lorenz `sigma/rho/beta` or Rossler `a/b/c`.
 
 ## Presets

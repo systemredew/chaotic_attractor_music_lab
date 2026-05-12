@@ -148,7 +148,7 @@ class Renderer:
         octave_range: int,
         note_probability: float,
         swing: float,
-        echo_amount: float,
+        fuzz_amount: float,
         multi_voice: bool,
         parameter_values: dict[str, float],
     ) -> None:
@@ -190,7 +190,7 @@ class Renderer:
                 octave_range=octave_range,
                 note_probability=note_probability,
                 swing=swing,
-                echo_amount=echo_amount,
+                fuzz_amount=fuzz_amount,
                 multi_voice=multi_voice,
                 system_name=system_name,
                 parameter_values=parameter_values,

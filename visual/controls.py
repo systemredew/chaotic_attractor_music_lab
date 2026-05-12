@@ -27,7 +27,7 @@ class UIState:
     octave_range: int
     note_probability: float
     swing: float
-    echo_amount: float
+    fuzz_amount: float
     multi_voice: bool
     system_name: str
     parameter_values: dict[str, float]
@@ -225,7 +225,7 @@ class ControlPanel:
             Slider(pygame.Rect(middle_x, y3 + row_gap * 4, column_w, 28), "Octaves", config.MIN_OCTAVE_RANGE, config.MAX_OCTAVE_RANGE, 4, "octave_range", True),
             Slider(pygame.Rect(middle_x, y3 + row_gap * 5, column_w, 28), "Probability", config.MIN_NOTE_PROBABILITY, config.MAX_NOTE_PROBABILITY, 1.0, "note_probability"),
             Slider(pygame.Rect(middle_x, y3 + row_gap * 6, column_w, 28), "Swing", config.MIN_SWING, config.MAX_SWING, 0.0, "swing"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 7, column_w, 28), "Echo", config.MIN_ECHO, config.MAX_ECHO, 0.0, "echo"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 7, column_w, 28), "Fuzz", 0.0, 1.0, 0.0, "fuzz"),
             Slider(pygame.Rect(right_x, y3, right_w, 28), "Speed", config.MIN_STEPS_PER_FRAME, config.MAX_STEPS_PER_FRAME, config.DEFAULT_STEPS_PER_FRAME, "speed", True),
             Slider(pygame.Rect(right_x, y3 + row_gap, right_w, 28), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
             Slider(pygame.Rect(right_x, y3 + row_gap * 2, right_w, 28), "Chaos influence", config.MIN_CHAOS_INFLUENCE, config.MAX_CHAOS_INFLUENCE, 1.0, "chaos_influence"),
@@ -278,8 +278,8 @@ class ControlPanel:
                 slider.value = state.note_probability
             elif slider.action == "swing":
                 slider.value = state.swing
-            elif slider.action == "echo":
-                slider.value = state.echo_amount
+            elif slider.action == "fuzz":
+                slider.value = state.fuzz_amount
             elif slider.action.startswith("parameter:"):
                 index = int(slider.action.split(":", maxsplit=1)[1])
                 if index < len(parameter_items):
@@ -424,7 +424,7 @@ class ControlPanel:
             "octave_range": "Pitch range in octaves",
             "note_probability": "Chance that a generated note is played",
             "swing": "Offsets/lengthens every second note",
-            "echo": "Adds delayed repeats to generated sound",
+            "fuzz": "Manual distortion amount",
             "speed": "Simulation steps per frame",
             "trail_limit": "Number of trajectory points on screen",
             "chaos_influence": "How strongly chaos affects music density",

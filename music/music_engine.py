@@ -20,7 +20,6 @@ class MusicEngine:
         self.current_notes: list[int] = []
         self.events: list[tuple[float, NoteEvent]] = []
         self.tempo_bpm = config.DEFAULT_TEMPO_BPM
-        self.echo_amount = 0.0
         self._midi_out = None
         self._audio_ready = False
         self.init_midi()
@@ -91,7 +90,7 @@ class MusicEngine:
     def _should_play_audio(self, event: NoteEvent) -> bool:
         if not self._audio_ready:
             return False
-        return self._midi_out is None or self.echo_amount > 0.01 or event.fuzz > 0.01
+        return self._midi_out is None or event.echo > 0.01 or event.fuzz > 0.01
 
     def _play_midi(self, event: NoteEvent) -> None:
         import mido
@@ -111,29 +110,36 @@ class MusicEngine:
     def _play_tone(self, event: NoteEvent) -> None:
         frequency = 440.0 * (2.0 ** ((event.note - 69) / 12.0))
         sample_rate = 44100
-        echo = float(np.clip(self.echo_amount * 10.0, 0.0, 1.0))
+        echo = float(np.clip(event.echo, 0.0, 1.0))
         base_samples = max(1, int(sample_rate * event.duration))
         echo_tail = int(sample_rate * (0.35 + echo * 0.9))
         n_samples = base_samples + (echo_tail if echo > 0.01 else 0)
         t = np.linspace(0.0, event.duration, base_samples, False)
         envelope = np.minimum(1.0, np.linspace(0.0, 12.0, base_samples)) * np.linspace(1.0, 0.0, base_samples)
         base_wave = np.sin(2.0 * math.pi * frequency * t) * envelope * (event.velocity / 127.0)
+        dry_gain = 0.0 if self._midi_out is not None and event.fuzz <= 0.01 and echo > 0.01 else 1.0
         wave = np.zeros(n_samples, dtype=np.float64)
-        wave[:base_samples] = base_wave
+        wave[:base_samples] = base_wave * dry_gain
+        echo_source = np.zeros(n_samples, dtype=np.float64)
+        echo_source[:base_samples] = base_wave
         if event.fuzz > 0.01:
             drive = 1.0 + event.fuzz * 7.0
             wave = np.tanh(wave * drive) / np.tanh(drive)
+            echo_source = np.tanh(echo_source * drive) / np.tanh(drive)
         if echo > 0.01:
             delay = int(sample_rate * 0.11)
             echo_wave = np.zeros_like(wave)
             if delay < n_samples:
-                feedback = 0.34 + echo * 0.58
-                wet_gain = 0.75 + echo * 1.25
-                for repeat, decay in enumerate((1.0, 0.72, 0.52, 0.36, 0.24), start=1):
+                feedback = 0.22 + echo * 0.36
+                wet_gain = 0.45 + echo * 0.65
+                for repeat, decay in enumerate((1.0, 0.58, 0.34, 0.2), start=1):
                     offset = delay * repeat
                     if offset < n_samples:
-                        echo_wave[offset:] += wave[:-offset] * feedback * decay * wet_gain
-            wave = np.tanh(wave + echo_wave)
+                        echo_wave[offset:] += echo_source[:-offset] * feedback * decay * wet_gain
+            wave = wave + echo_wave
+            peak = float(np.max(np.abs(wave)))
+            if peak > 0.82:
+                wave = wave / peak * 0.82
         audio = (wave * 32767).astype(np.int16)
         mixer_info = pygame.mixer.get_init()
         if mixer_info is not None and mixer_info[2] == 2:
