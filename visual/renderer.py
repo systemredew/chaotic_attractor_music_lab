@@ -34,6 +34,10 @@ class Renderer:
         self.trail_limit = config.TRAIL_LIMIT
         self.performance_mode = False
         self.visual_style = config.VISUAL_STYLES[0]
+        self.pulse_style = config.PULSE_STYLES[0]
+        self.trail_decay_mode = config.TRAIL_DECAY_MODES[0]
+        self.depth_fade = 1.0
+        self.line_thickness = 1
 
     def _set_window_icon(self) -> None:
         icon_path = Path(__file__).resolve().parents[1] / config.APP_ICON_PNG
@@ -74,10 +78,6 @@ class Renderer:
         pygame.image.save(self.screen, output)
         return output
 
-    def cycle_visual_style(self) -> None:
-        index = config.VISUAL_STYLES.index(self.visual_style) if self.visual_style in config.VISUAL_STYLES else 0
-        self.visual_style = config.VISUAL_STYLES[(index + 1) % len(config.VISUAL_STYLES)]
-
     def reset_trail(self) -> None:
         self.trail.clear()
 
@@ -90,6 +90,10 @@ class Renderer:
             return
         self.trail_limit = limit
         self.trail = deque(self.trail, maxlen=limit)
+
+    def cycle_trail_decay_mode(self) -> None:
+        index = config.TRAIL_DECAY_MODES.index(self.trail_decay_mode) if self.trail_decay_mode in config.TRAIL_DECAY_MODES else 0
+        self.trail_decay_mode = config.TRAIL_DECAY_MODES[(index + 1) % len(config.TRAIL_DECAY_MODES)]
 
     def trigger_note_pulse(self) -> None:
         self.pulse_power = 1.0
@@ -143,6 +147,10 @@ class Renderer:
         trail_limit: int,
         auto_camera: bool,
         performance_mode: bool,
+        pulse_style: str,
+        trail_decay_mode: str,
+        depth_fade: float,
+        line_thickness: int,
         bpm: int,
         note_length_multiplier: float,
         octave_range: int,
@@ -153,6 +161,10 @@ class Renderer:
         parameter_values: dict[str, float],
     ) -> None:
         self.performance_mode = performance_mode
+        self.pulse_style = pulse_style
+        self.trail_decay_mode = trail_decay_mode
+        self.depth_fade = depth_fade
+        self.line_thickness = line_thickness
         self.screen.fill(config.BACKGROUND_COLOR)
         pygame.draw.rect(self.screen, config.BACKGROUND_COLOR, self.visual_rect)
         if auto_camera:
@@ -185,6 +197,10 @@ class Renderer:
                 auto_camera=auto_camera,
                 performance_mode=performance_mode,
                 visual_style=self.visual_style,
+                pulse_style=self.pulse_style,
+                trail_decay_mode=self.trail_decay_mode,
+                depth_fade=self.depth_fade,
+                line_thickness=self.line_thickness,
                 bpm=bpm,
                 note_length_multiplier=note_length_multiplier,
                 octave_range=octave_range,
@@ -201,13 +217,15 @@ class Renderer:
 
     def _draw_3d_trail(self, system_name: str) -> None:
         previous: tuple[int, int] | None = None
-        for point, point_speed, chaos in self.trail:
+        trail_points = list(self.trail)
+        total = max(1, len(trail_points) - 1)
+        for index, (point, point_speed, chaos) in enumerate(trail_points):
             projected_point = self._point_to_3d(point, system_name)
             x, y, depth = self.camera.project_with_depth(projected_point)
             projected = (x, y)
             color = self._shade_depth(speed_color(point_speed, chaos), depth)
             if previous is not None:
-                pygame.draw.line(self.screen, color, previous, projected, 1)
+                pygame.draw.line(self.screen, self._shade_age(color, index / total), previous, projected, self.line_thickness)
             previous = projected
         if previous is not None:
             self._draw_current_point(previous)
@@ -216,6 +234,8 @@ class Renderer:
         values = np.asarray(point, dtype=np.float64)
         if system_name in {"Lorenz", "Rossler"}:
             return values[:3]
+        if system_name == "Halvorsen":
+            return values[:3] * 3.2
         if system_name == "Henon":
             x = float(values[0])
             y = float(values[1]) if values.size > 1 else 0.0
@@ -237,20 +257,42 @@ class Renderer:
         return np.pad(values, (0, max(0, 3 - values.size)), mode="constant")[:3]
 
     def _draw_current_point(self, point: tuple[int, int]) -> None:
-        radius = config.POINT_RADIUS + 2 + int(self.pulse_power * config.PULSE_RADIUS_BOOST)
-        if self.pulse_power > 0.03:
-            pulse_color = (98, 210, 190)
-            pygame.draw.circle(self.screen, pulse_color, point, radius, 2)
+        if self.pulse_style == "glow":
+            self._draw_glow_pulse(point)
+        else:
+            radius = config.POINT_RADIUS + 2 + int(self.pulse_power * config.PULSE_RADIUS_BOOST)
+            if self.pulse_power > 0.03:
+                pulse_color = (98, 210, 190)
+                pygame.draw.circle(self.screen, pulse_color, point, radius, 2)
         core_radius = config.POINT_RADIUS + 3 + int(self.pulse_power * 5)
         pygame.draw.circle(self.screen, (255, 255, 245), point, core_radius)
 
+    def _draw_glow_pulse(self, point: tuple[int, int]) -> None:
+        if self.pulse_power <= 0.03:
+            return
+        max_radius = config.POINT_RADIUS + 10 + int(self.pulse_power * 34)
+        glow_surface = pygame.Surface((max_radius * 2 + 4, max_radius * 2 + 4), pygame.SRCALPHA)
+        center = glow_surface.get_width() // 2, glow_surface.get_height() // 2
+        for index, alpha in enumerate((42, 30, 18)):
+            radius = max_radius - index * 8
+            if radius > 0:
+                pygame.draw.circle(glow_surface, (98, 210, 190, int(alpha * self.pulse_power)), center, radius)
+        self.screen.blit(glow_surface, glow_surface.get_rect(center=point))
+
     def _depth_factor(self, depth: float) -> float:
-        return float(np.clip((depth + 40.0) / 85.0, 0.28, 1.0))
+        raw = float(np.clip((depth + 40.0) / 85.0, 0.28, 1.0))
+        return float(np.clip(1.0 - (1.0 - raw) * self.depth_fade, 0.12, 1.0))
 
     def _shade_depth(self, color: tuple[int, int, int], depth: float) -> tuple[int, int, int]:
         factor = self._depth_factor(depth)
         styled = self._style_color(color)
         return tuple(int(np.clip(channel * factor + 10 * (1.0 - factor), 0, 255)) for channel in styled)
+
+    def _shade_age(self, color: tuple[int, int, int], age: float) -> tuple[int, int, int]:
+        if self.trail_decay_mode != "fade":
+            return color
+        factor = 0.18 + 0.82 * float(np.clip(age, 0.0, 1.0))
+        return tuple(int(channel * factor) for channel in color)
 
     def _style_color(self, color: tuple[int, int, int]) -> tuple[int, int, int]:
         red, green, blue = color

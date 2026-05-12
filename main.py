@@ -15,7 +15,7 @@ from music.mapper import MusicMapper
 from music.music_engine import MusicEngine
 from music.scales import SCALES
 from presets.presets import PRESETS, Preset
-from systems import HenonMap, LogisticMap, LorenzSystem, RosslerSystem
+from systems import HalvorsenSystem, HenonMap, LogisticMap, LorenzSystem, RosslerSystem
 from systems.base_system import BaseSystem
 from visual.renderer import Renderer
 
@@ -32,6 +32,8 @@ def create_system(preset: Preset) -> BaseSystem:
         return LorenzSystem(**preset.parameters)
     if preset.system == "Rossler":
         return RosslerSystem(**preset.parameters)
+    if preset.system == "Halvorsen":
+        return HalvorsenSystem(**preset.parameters)
     if preset.system == "Henon":
         return HenonMap(**preset.parameters)
     if preset.system == "Logistic":
@@ -107,6 +109,10 @@ class ChaoticAttractorMusicLab:
         self.performance_mode = False
         self.renderer.performance_mode = False
         self.renderer.visual_style = config.VISUAL_STYLES[0]
+        self.renderer.pulse_style = config.PULSE_STYLES[0]
+        self.renderer.trail_decay_mode = config.TRAIL_DECAY_MODES[0]
+        self.renderer.depth_fade = 1.0
+        self.renderer.line_thickness = 1
         self.renderer.camera.rotation_x = 0.65
         self.renderer.camera.rotation_y = -0.55
         self.renderer.camera.zoom = 9.6
@@ -144,6 +150,10 @@ class ChaoticAttractorMusicLab:
                 trail_limit=self.renderer.trail_limit,
                 auto_camera=self.auto_camera,
                 performance_mode=self.performance_mode,
+                pulse_style=self.renderer.pulse_style,
+                trail_decay_mode=self.renderer.trail_decay_mode,
+                depth_fade=self.renderer.depth_fade,
+                line_thickness=self.renderer.line_thickness,
                 bpm=self.mapper.bpm,
                 note_length_multiplier=self.mapper.note_length_multiplier,
                 octave_range=self.mapper.octave_range,
@@ -229,16 +239,16 @@ class ChaoticAttractorMusicLab:
             self._cycle_scale()
         elif action == "auto_camera":
             self.auto_camera = not self.auto_camera
-        elif action == "visual_style":
-            self.renderer.cycle_visual_style()
+        elif action.startswith("visual_style:"):
+            self.renderer.visual_style = action.split(":", maxsplit=1)[1]
+        elif action.startswith("pulse_style:"):
+            self.renderer.pulse_style = action.split(":", maxsplit=1)[1]
+        elif action == "trail_decay":
+            self.renderer.cycle_trail_decay_mode()
         elif action == "multi_voice":
             self.mapper.multi_voice = not self.mapper.multi_voice
         elif action == "toggle_panel":
-            self.performance_mode = not self.performance_mode
-            self.renderer.performance_mode = self.performance_mode
-        elif action == "performance":
-            self.performance_mode = not self.performance_mode
-            self.renderer.performance_mode = self.performance_mode
+            self._toggle_panel()
         elif action == "speed" and value is not None:
             self.steps_per_frame = int(value)
         elif action == "density" and value is not None:
@@ -249,6 +259,10 @@ class ChaoticAttractorMusicLab:
             self.chaos_influence = float(value)
         elif action == "trail_limit" and value is not None:
             self.renderer.set_trail_limit(int(value))
+        elif action == "depth_fade" and value is not None:
+            self.renderer.depth_fade = float(value)
+        elif action == "line_thickness" and value is not None:
+            self.renderer.line_thickness = int(value)
         elif action == "bpm" and value is not None:
             self.mapper.bpm = int(value)
             self.music.tempo_bpm = int(value)
@@ -277,7 +291,7 @@ class ChaoticAttractorMusicLab:
             self.paused = not self.paused
         elif key == pygame.K_r:
             self.reset()
-        elif pygame.K_1 <= key <= pygame.K_5:
+        elif pygame.K_1 <= key <= min(pygame.K_9, pygame.K_1 + len(PRESETS) - 1):
             self.load_preset(key - pygame.K_1)
         elif key == pygame.K_m:
             self.music.toggle_mute()
@@ -299,8 +313,7 @@ class ChaoticAttractorMusicLab:
         elif key == pygame.K_F11 or (key == pygame.K_RETURN and pygame.key.get_mods() & pygame.KMOD_ALT):
             self.renderer.toggle_fullscreen()
         elif key == pygame.K_TAB:
-            self.performance_mode = not self.performance_mode
-            self.renderer.performance_mode = self.performance_mode
+            self._toggle_panel()
         elif key == pygame.K_F12:
             self.renderer.save_screenshot(Path(config.EXPORT_DIR) / config.DEFAULT_SCREENSHOT_FILE)
 
@@ -320,6 +333,10 @@ class ChaoticAttractorMusicLab:
             self.system.parameters[name] = value
         if self.system.name == "Logistic" and name == "r":
             self.system.parameters["r"] = value
+
+    def _toggle_panel(self) -> None:
+        self.performance_mode = not self.performance_mode
+        self.renderer.performance_mode = self.performance_mode
 
 
 def smoke_test() -> None:

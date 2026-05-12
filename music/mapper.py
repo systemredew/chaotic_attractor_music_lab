@@ -74,6 +74,10 @@ class MusicMapper:
             pitch_value = self.normalize(x, -15.0, 15.0)
             echo_value = min(0.7, self.normalize(abs(y), 0.0, 15.0) * 0.75)
             octave_shift = round(self.normalize(z, 0.0, 30.0) * 7)
+        elif system_name == "Halvorsen":
+            pitch_value = self.normalize(x, -12.0, 12.0)
+            echo_value = min(0.7, self.normalize(abs(y), 0.0, 12.0) * 0.75)
+            octave_shift = round(self.normalize(z, -12.0, 12.0) * 10)
         elif system_name == "Henon":
             pitch_value = self.normalize(x, -1.5, 1.5)
             echo_value = min(0.7, self.normalize(abs(y), 0.0, 0.45) * 0.8)

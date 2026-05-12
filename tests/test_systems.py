@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from systems import HenonMap, LogisticMap, LorenzSystem, RosslerSystem
+from systems import HalvorsenSystem, HenonMap, LogisticMap, LorenzSystem, RosslerSystem
 
 
 def test_lorenz_derivatives_has_three_values() -> None:
@@ -11,6 +11,10 @@ def test_lorenz_derivatives_has_three_values() -> None:
 
 def test_rossler_derivatives_has_three_values() -> None:
     assert RosslerSystem().derivatives().shape == (3,)
+
+
+def test_halvorsen_derivatives_has_three_values() -> None:
+    assert HalvorsenSystem().derivatives().shape == (3,)
 
 
 def test_henon_updates_state() -> None:

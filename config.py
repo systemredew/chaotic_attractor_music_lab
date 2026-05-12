@@ -42,6 +42,10 @@ MIN_CHAOS_INFLUENCE = 0.0
 MAX_CHAOS_INFLUENCE = 2.0
 MIN_TRAIL_LIMIT = 500
 MAX_TRAIL_LIMIT = 12000
+MIN_DEPTH_FADE = 0.0
+MAX_DEPTH_FADE = 2.0
+MIN_LINE_THICKNESS = 1
+MAX_LINE_THICKNESS = 5
 
 MIDI_TICKS_PER_BEAT = 480
 DEFAULT_TEMPO_BPM = 120
@@ -85,10 +89,10 @@ MIN_NOTE_PROBABILITY = 0.05
 MAX_NOTE_PROBABILITY = 1.0
 MIN_SWING = 0.0
 MAX_SWING = 0.65
-MIN_ECHO = 0.0
-MAX_ECHO = 1.0
 
 VISUAL_STYLES = ["aurora", "ember", "ice", "mono"]
+PULSE_STYLES = ["default", "glow"]
+TRAIL_DECAY_MODES = ["hard", "fade"]
 
 
 @dataclass(frozen=True)
@@ -104,6 +108,7 @@ class ViewBounds:
 SYSTEM_BOUNDS: dict[str, ViewBounds] = {
     "Lorenz": ViewBounds(-30.0, 30.0, -35.0, 35.0, 0.0, 55.0),
     "Rossler": ViewBounds(-15.0, 15.0, -15.0, 15.0, 0.0, 30.0),
+    "Halvorsen": ViewBounds(-12.0, 12.0, -12.0, 12.0, -12.0, 12.0),
     "Henon": ViewBounds(-1.6, 1.6, -0.5, 0.5),
     "Logistic": ViewBounds(2.5, 4.0, 0.0, 1.0),
 }
@@ -118,6 +123,9 @@ SYSTEM_PARAMETER_RANGES: dict[str, dict[str, tuple[float, float]]] = {
         "a": (0.01, 1.0),
         "b": (0.01, 1.0),
         "c": (1.0, 14.0),
+    },
+    "Halvorsen": {
+        "a": (0.5, 2.2),
     },
     "Henon": {
         "a": (0.5, 1.6),

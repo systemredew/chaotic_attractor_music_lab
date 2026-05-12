@@ -4,7 +4,7 @@ Generative music and visualization laboratory for chaotic dynamical systems in P
 
 ## Short Description
 
-Chaotic Attractor Music Lab simulates Lorenz, Rossler, Henon, and Logistic systems, draws their trajectories with pygame, estimates chaotic behavior, and maps coordinates, speed, acceleration, curvature, Lyapunov values, and bifurcation movement into quantized MIDI notes.
+Chaotic Attractor Music Lab simulates Lorenz, Rossler, Halvorsen, Henon, and Logistic systems, draws their trajectories with pygame, estimates chaotic behavior, and maps coordinates, speed, acceleration, curvature, Lyapunov values, and bifurcation movement into quantized MIDI notes.
 
 Chaos here is not treated as random noise. The app turns deterministic mathematical motion into constrained musical material: scales, root notes, velocity ranges, cooldowns, and rhythmic density keep the output musical while the systems provide variation.
 
@@ -14,7 +14,7 @@ Run the app, select a preset with `1`-`5`, and export the current session with `
 
 ## Features
 
-- Lorenz and Rossler continuous attractors integrated with RK4.
+- Lorenz, Rossler, and Halvorsen continuous attractors integrated with RK4.
 - Henon and Logistic discrete maps.
 - Logistic bifurcation sequencer where `r` moves from order toward chaos.
 - Realtime pygame visualization with projected 3D trajectories.
@@ -24,7 +24,7 @@ Run the app, select a preset with `1`-`5`, and export the current session with `
 - Performance mode hides the control panel and leaves a clean stage view.
 - Multi-voice music mode adds bass, harmony, or percussion layers depending on the selected system.
 - System parameter sliders let you reshape Lorenz, Rossler, Henon, and Logistic behavior during runtime.
-- Depth shading for 3D trails.
+- Adjustable depth shading, line thickness, and hard/fading trail modes for 3D trails.
 - MIDI note mapping with major, minor, pentatonic, whole-tone, and chromatic scales.
 - Live MIDI output when a MIDI device is available.
 - pygame audio fallback when live MIDI is unavailable.
@@ -78,8 +78,9 @@ Most keyboard controls are also available in the translucent bottom GUI panel. U
 - `1` Calm Lorenz.
 - `2` Butterfly Chaos.
 - `3` Rossler Drone.
-- `4` Henon Percussion.
-- `5` Bifurcation Piano.
+- `4` Halvorsen Storm.
+- `5` Henon Percussion.
+- `6` Bifurcation Piano.
 - `M` mute or unmute.
 - `S` export MIDI to `exports/chaotic_attractor_session.mid`.
 - `B` generate Logistic bifurcation diagram PNG in `exports/`.
@@ -91,14 +92,16 @@ Most keyboard controls are also available in the translucent bottom GUI panel. U
 
 GUI-only controls:
 
-- `Scale` cycles through available musical scales.
-- `Auto Cam` toggles automatic camera rotation.
-- `Style` cycles visual palettes.
-- `Voice` toggles multi-voice music mapping.
+- `Scale` in `MUSIC` cycles through available musical scales.
+- `Auto Cam` in `VISUAL` toggles automatic camera rotation.
+- `Voice` in `MUSIC` toggles multi-voice music mapping.
+- `Style` in `VISUAL` selects the trajectory color palette.
+- `Pulse` in `VISUAL` selects the current-point pulse animation.
+- `Depth`, `Line`, `Trail`, and `Decay` in `VISUAL` shape the trajectory rendering.
 - `Hide` / `Show` hides or restores the bottom GUI panel.
 - `Default` restores the current preset and global controls to default values.
 - `Tone` changes the base MIDI note.
-- `Chaos influence` controls how strongly the Lyapunov estimate affects note density.
+- `Chaos` in `MUSIC` controls how strongly the Lyapunov estimate affects note density.
 - `Trail` changes the number of retained trajectory points.
 - `BPM`, `Length`, `Octaves`, `Probability`, `Swing`, and `Fuzz` shape the generated music.
 - Dynamic parameter sliders edit the active system parameters, such as Lorenz `sigma/rho/beta` or Rossler `a/b/c`.
@@ -108,6 +111,7 @@ GUI-only controls:
 - Calm Lorenz: lower `rho`, minor pentatonic scale, slow ambient note density.
 - Butterfly Chaos: classic Lorenz parameters, natural minor scale, more active musical behavior.
 - Rossler Drone: Rossler attractor with harmonic minor, longer and calmer gestures.
+- Halvorsen Storm: folded 3D attractor with dense whole-tone movement.
 - Henon Percussion: discrete Henon map with whole-tone color and short events.
 - Bifurcation Piano: Logistic map sequencer, moving from stable behavior toward chaos.
 
