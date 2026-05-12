@@ -94,6 +94,10 @@ MAX_SWING = 0.65
 VISUAL_STYLES = ["aurora", "ember", "ice", "mono"]
 PULSE_STYLES = ["default", "glow"]
 TRAIL_DECAY_MODES = ["hard", "fade"]
+PARAMETER_MOTION_MODES = ["off", "drift", "orbit", "pulse", "chaos"]
+MIN_PARAMETER_MOTION_AMOUNT = 0.0
+MAX_PARAMETER_MOTION_AMOUNT = 1.0
+PARAMETER_MOTION_RANGE_FRACTION = 0.18
 
 
 @dataclass(frozen=True)

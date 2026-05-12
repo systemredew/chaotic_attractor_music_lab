@@ -34,6 +34,8 @@ class UIState:
     swing: float
     fuzz_amount: float
     multi_voice: bool
+    parameter_motion_mode: str
+    parameter_motion_amount: float
     system_name: str
     parameter_values: dict[str, float]
 
@@ -153,6 +155,7 @@ class ControlPanel:
         self.panel_toggle_button = Button(pygame.Rect(0, 0, 76, 30), "Panel", "toggle_panel")
         self.panel_hidden = False
         self.system_slider_area = pygame.Rect(0, 0, 1, 1)
+        self.system_motion_y = 0
         self.row_gap = 32
         self._build()
 
@@ -223,6 +226,7 @@ class ControlPanel:
         row_gap = 32
         self.row_gap = row_gap
         self.system_slider_area = pygame.Rect(left_x, y3, column_w, section_height - 44)
+        self.system_motion_y = y3 + row_gap * 4
         system_gap = 14
         system_w = (column_w - system_gap) // 2
         system_right_x = left_x + system_w + system_gap
@@ -236,6 +240,14 @@ class ControlPanel:
             Slider(pygame.Rect(system_right_x, y3, system_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:3"),
             Slider(pygame.Rect(system_right_x, y3 + row_gap, system_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:4"),
             Slider(pygame.Rect(system_right_x, y3 + row_gap * 2, system_w, 28), "Param", 0.0, 1.0, 0.0, "parameter:5"),
+            Slider(
+                pygame.Rect(left_x, self.system_motion_y + button_h + 12, column_w, 28),
+                "Motion Amt",
+                config.MIN_PARAMETER_MOTION_AMOUNT,
+                config.MAX_PARAMETER_MOTION_AMOUNT,
+                0.0,
+                "parameter_motion_amount",
+            ),
             Slider(pygame.Rect(middle_x, y3, music_w, 28), "Tone", config.MIN_ROOT_NOTE, config.MAX_ROOT_NOTE, config.DEFAULT_ROOT_NOTE, "root_note", True),
             Slider(pygame.Rect(middle_x, y3 + row_gap, music_w, 28), "Density", config.MIN_DENSITY_MULTIPLIER, config.MAX_DENSITY_MULTIPLIER, 1.0, "density"),
             Slider(pygame.Rect(middle_x, y3 + row_gap * 2, music_w, 28), "BPM", config.MIN_BPM, config.MAX_BPM, config.DEFAULT_TEMPO_BPM, "bpm", True),
@@ -251,6 +263,10 @@ class ControlPanel:
             Slider(pygame.Rect(right_x, y3 + row_gap * 6, right_w, 28), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
         ]
         music_button_y = y3 + row_gap * 5 + 6
+        motion_w = max(54, (column_w - 6 * (len(config.PARAMETER_MOTION_MODES) - 1)) // len(config.PARAMETER_MOTION_MODES))
+        for index, motion_name in enumerate(config.PARAMETER_MOTION_MODES):
+            rect = pygame.Rect(left_x + index * (motion_w + 6), self.system_motion_y, motion_w, button_h)
+            self.buttons.append(Button(rect, motion_name.title(), f"parameter_motion:{motion_name}"))
         self.buttons.append(Button(pygame.Rect(middle_x, music_button_y, 72, button_h), "Voice", "multi_voice"))
         self.buttons.append(Button(pygame.Rect(middle_x + 80, music_button_y, 72, button_h), "Chaos", "chaos"))
         scale_y = music_button_y + button_h + 10
@@ -304,6 +320,8 @@ class ControlPanel:
                 button.active = button.action.split(":", maxsplit=1)[1] == state.trail_decay_mode
             elif button.action == "multi_voice":
                 button.active = state.multi_voice
+            elif button.action.startswith("parameter_motion:"):
+                button.active = button.action.split(":", maxsplit=1)[1] == state.parameter_motion_mode
         self.panel_toggle_button.active = state.performance_mode
         self.panel_toggle_button.label = "Show" if state.performance_mode else "Hide"
 
@@ -325,6 +343,8 @@ class ControlPanel:
                 slider.value = state.depth_fade
             elif slider.action == "line_thickness":
                 slider.value = state.line_thickness
+            elif slider.action == "parameter_motion_amount":
+                slider.value = state.parameter_motion_amount
             elif slider.action == "bpm":
                 slider.value = state.bpm
             elif slider.action == "note_length":
@@ -475,6 +495,7 @@ class ControlPanel:
             "chaos_influence": "How strongly chaos affects music density",
             "depth_fade": "How strongly distance darkens the trail",
             "line_thickness": "Trajectory line thickness",
+            "parameter_motion_amount": "Strength of parameter modulation",
         }
 
     def _tooltip_text(self, mouse_pos: tuple[int, int]) -> str | None:
@@ -492,6 +513,8 @@ class ControlPanel:
                     return "Select musical scale"
                 if button.action.startswith("trail_decay:"):
                     return "Select trail decay mode"
+                if button.action.startswith("parameter_motion:"):
+                    return "Select system parameter motion pattern"
                 return self._button_tooltips().get(button.action)
         if self.panel_toggle_button.rect.collidepoint(mouse_pos):
             return self._button_tooltips().get(self.panel_toggle_button.action)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import math
 from pathlib import Path
 
 import numpy as np
@@ -51,6 +52,7 @@ class ChaoticAttractorMusicLab:
         self.preset_index = preset_index
         self.preset = PRESETS[preset_index]
         self.system = create_system(self.preset)
+        self.base_parameters = self._read_system_parameters()
         self.mapper = MusicMapper(scale_name=self.preset.scale)
         self.lyapunov = LyapunovEstimator(self.system)
         self.paused = False
@@ -65,11 +67,17 @@ class ChaoticAttractorMusicLab:
         self.previous_speed = 0.0
         self.points_for_curvature = []
         self.simulation_credit = 0.0
+        self.parameter_motion_mode = "off"
+        self.parameter_motion_amount = 0.0
+        self.parameter_motion_time = 0.0
+        self.parameter_motion_pulse = 0.0
+        self.parameter_motion_chaos = 0.37
 
     def load_preset(self, index: int) -> None:
         self.preset_index = index
         self.preset = PRESETS[index]
         self.system = create_system(self.preset)
+        self.base_parameters = self._read_system_parameters()
         self.mapper.scale_name = self.preset.scale
         self.density_multiplier = self.preset.note_density
         self.lyapunov = LyapunovEstimator(self.system)
@@ -81,6 +89,7 @@ class ChaoticAttractorMusicLab:
 
     def reset(self) -> None:
         self.system.reset()
+        self.base_parameters = self._read_system_parameters()
         self.lyapunov = LyapunovEstimator(self.system)
         self.renderer.reset_trail()
         self.previous_point = None
@@ -91,6 +100,7 @@ class ChaoticAttractorMusicLab:
     def reset_defaults(self) -> None:
         self.preset = PRESETS[self.preset_index]
         self.system = create_system(self.preset)
+        self.base_parameters = self._read_system_parameters()
         self.mapper.scale_name = self.preset.scale
         self.mapper.root_note = config.DEFAULT_ROOT_NOTE
         self.mapper.bpm = config.DEFAULT_TEMPO_BPM
@@ -125,6 +135,11 @@ class ChaoticAttractorMusicLab:
         self.previous_speed = 0.0
         self.points_for_curvature = []
         self.simulation_credit = 0.0
+        self.parameter_motion_mode = "off"
+        self.parameter_motion_amount = 0.0
+        self.parameter_motion_time = 0.0
+        self.parameter_motion_pulse = 0.0
+        self.parameter_motion_chaos = 0.37
 
     def run(self) -> None:
         while self.running:
@@ -154,6 +169,8 @@ class ChaoticAttractorMusicLab:
                 trail_decay_mode=self.renderer.trail_decay_mode,
                 depth_fade=self.renderer.depth_fade,
                 line_thickness=self.renderer.line_thickness,
+                parameter_motion_mode=self.parameter_motion_mode,
+                parameter_motion_amount=self.parameter_motion_amount,
                 bpm=self.mapper.bpm,
                 note_length_multiplier=self.mapper.note_length_multiplier,
                 octave_range=self.mapper.octave_range,
@@ -171,6 +188,7 @@ class ChaoticAttractorMusicLab:
         steps_to_run = int(self.simulation_credit)
         self.simulation_credit -= steps_to_run
         for _ in range(steps_to_run):
+            self._apply_parameter_motion()
             with np.errstate(over="ignore", invalid="ignore"):
                 if self.system.is_discrete:
                     point = self.system.update()
@@ -203,9 +221,12 @@ class ChaoticAttractorMusicLab:
             )
             if self.music.play_events(events, self.density_multiplier):
                 self.renderer.trigger_note_pulse()
+                self.parameter_motion_pulse = 1.0
             self.renderer.append_point(point, current_speed, lyapunov_value)
             self.previous_point = point.copy()
             self.previous_speed = current_speed
+            self.parameter_motion_time += config.DEFAULT_DT
+            self.parameter_motion_pulse *= 0.92
 
     def _valid_point(self, point: object) -> bool:
         values = np.asarray(point, dtype=np.float64)
@@ -213,6 +234,7 @@ class ChaoticAttractorMusicLab:
 
     def _recover_invalid_state(self) -> None:
         self.system = create_system(self.preset)
+        self.base_parameters = self._read_system_parameters()
         self.lyapunov = LyapunovEstimator(self.system)
         self.renderer.reset_trail()
         self.previous_point = None
@@ -264,6 +286,9 @@ class ChaoticAttractorMusicLab:
             self.renderer.pulse_style = action.split(":", maxsplit=1)[1]
         elif action.startswith("trail_decay:"):
             self.renderer.trail_decay_mode = action.split(":", maxsplit=1)[1]
+        elif action.startswith("parameter_motion:"):
+            self.parameter_motion_mode = action.split(":", maxsplit=1)[1]
+            self._apply_parameter_motion()
         elif action == "multi_voice":
             self.mapper.multi_voice = not self.mapper.multi_voice
         elif action == "toggle_panel":
@@ -282,6 +307,9 @@ class ChaoticAttractorMusicLab:
             self.renderer.depth_fade = float(value)
         elif action == "line_thickness" and value is not None:
             self.renderer.line_thickness = int(value)
+        elif action == "parameter_motion_amount" and value is not None:
+            self.parameter_motion_amount = float(value)
+            self._apply_parameter_motion()
         elif action == "bpm" and value is not None:
             self.mapper.bpm = int(value)
             self.music.tempo_bpm = int(value)
@@ -332,25 +360,73 @@ class ChaoticAttractorMusicLab:
             self.renderer.save_screenshot(Path(config.EXPORT_DIR) / config.DEFAULT_SCREENSHOT_FILE)
 
     def _control_parameters(self) -> dict[str, float]:
-        values = dict(self.system.parameters)
-        if hasattr(self.system, "r_step"):
-            values["r_step"] = float(self.system.r_step)  # type: ignore[attr-defined]
-        return values
+        return dict(self.base_parameters)
 
     def _set_parameter_by_index(self, index: int, value: float) -> None:
         names = list(self._control_parameters())
         if index >= len(names):
             return
         name = names[index]
+        self.base_parameters[name] = value
         setattr(self.system, name, value)
         if name in self.system.parameters:
             self.system.parameters[name] = value
         if self.system.name == "Logistic" and name == "r":
             self.system.parameters["r"] = value
+        if self.system.name == "Logistic" and name == "r_step":
+            self.system.r_step = value  # type: ignore[attr-defined]
+        self._apply_parameter_motion()
 
     def _toggle_panel(self) -> None:
         self.performance_mode = not self.performance_mode
         self.renderer.performance_mode = self.performance_mode
+
+    def _read_system_parameters(self) -> dict[str, float]:
+        values = dict(self.system.parameters)
+        if hasattr(self.system, "r_step"):
+            values["r_step"] = float(self.system.r_step)  # type: ignore[attr-defined]
+        return values
+
+    def _apply_parameter_motion(self) -> None:
+        if self.system.is_discrete:
+            return
+        if self.parameter_motion_mode == "off" or self.parameter_motion_amount <= 0.0:
+            self._apply_parameters(self.base_parameters)
+            return
+        ranges = config.SYSTEM_PARAMETER_RANGES.get(self.system.name, {})
+        t = self.parameter_motion_time
+        modulated: dict[str, float] = {}
+        for index, (name, base_value) in enumerate(self.base_parameters.items()):
+            minimum, maximum = ranges.get(name, (base_value, base_value))
+            span = maximum - minimum
+            if span <= 0.0:
+                modulated[name] = base_value
+                continue
+            amount = self.parameter_motion_amount * config.PARAMETER_MOTION_RANGE_FRACTION * span
+            phase = index * 1.73
+            motion = self._parameter_motion_value(t, phase, index)
+            modulated[name] = float(np.clip(base_value + amount * motion, minimum, maximum))
+        self._apply_parameters(modulated)
+
+    def _parameter_motion_value(self, t: float, phase: float, index: int) -> float:
+        if self.parameter_motion_mode == "drift":
+            return math.sin(t * 0.18 + phase)
+        if self.parameter_motion_mode == "orbit":
+            return math.sin(t * (0.55 + index * 0.23) + phase)
+        if self.parameter_motion_mode == "pulse":
+            return self.parameter_motion_pulse * math.sin(phase + math.pi / 2.0)
+        if self.parameter_motion_mode == "chaos":
+            self.parameter_motion_chaos = 3.86 * self.parameter_motion_chaos * (1.0 - self.parameter_motion_chaos)
+            return self.parameter_motion_chaos * 2.0 - 1.0
+        return 0.0
+
+    def _apply_parameters(self, values: dict[str, float]) -> None:
+        for name, value in values.items():
+            setattr(self.system, name, value)
+            if name in self.system.parameters:
+                self.system.parameters[name] = value
+            if self.system.name == "Logistic" and name == "r_step":
+                self.system.r_step = value  # type: ignore[attr-defined]
 
 
 def smoke_test() -> None:

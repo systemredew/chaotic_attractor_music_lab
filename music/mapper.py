@@ -155,9 +155,6 @@ class MusicMapper:
         if system_name == "Rossler":
             bass = NoteEvent(max(0, lead.note - 24), max(22, lead.velocity - 36), lead.duration * 2.6, max(0.05, lead.density * 0.35), lead.fuzz * 0.45, 1, lead.echo * 0.8)
             events.append(bass)
-        elif system_name == "Henon":
-            perc_note = 36 + (lead.note % 12)
-            events.append(NoteEvent(perc_note, min(127, lead.velocity + 12), max(0.035, lead.duration * 0.35), min(1.0, lead.density + 0.2), lead.fuzz, 9, lead.echo))
         elif lyapunov_value > 0.35:
             interval = 7 if curvature < 1.2 else 10
             harmony = NoteEvent(min(127, lead.note + interval), max(24, lead.velocity - 24), lead.duration * 1.35, lead.density * 0.55, lead.fuzz * 0.7, 2, lead.echo * 0.9)

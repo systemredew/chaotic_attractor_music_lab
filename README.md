@@ -22,8 +22,9 @@ Run the app, select a preset with `1`-`5`, and export the current session with `
 - Interactive pseudo-3D camera for all systems, including Henon and Logistic/Bifurcation embeddings: drag the scene to rotate, use the mouse wheel to zoom, or enable automatic camera rotation.
 - Resizable window and fullscreen mode.
 - Performance mode hides the control panel and leaves a clean stage view.
-- Multi-voice music mode adds bass, harmony, or percussion layers depending on the selected system.
-- System parameter sliders let you reshape Lorenz, Rossler, Henon, and Logistic behavior during runtime.
+- Multi-voice music mode adds bass or harmonic layers depending on the selected system.
+- System parameter sliders let you reshape Lorenz, Rossler, Halvorsen, Henon, and Logistic behavior during runtime.
+- Parameter Motion in `SYSTEM` can animate continuous-system parameters with Drift, Orbit, Pulse, or Chaos patterns.
 - Adjustable depth shading, line thickness, and hard/fading trail modes for 3D trails.
 - MIDI note mapping with major, minor, pentatonic, whole-tone, and chromatic scales.
 - Live MIDI output when a MIDI device is available.
@@ -95,6 +96,8 @@ GUI-only controls:
 - `Scale` in `MUSIC` cycles through available musical scales.
 - `Auto Cam` in `VISUAL` toggles automatic camera rotation.
 - `Voice` in `MUSIC` toggles multi-voice music mapping.
+- `Motion` in `SYSTEM` selects Off, Drift, Orbit, Pulse, or Chaos parameter animation.
+- `Motion Amt` controls how strongly parameter animation affects the base system sliders.
 - `Style` in `VISUAL` selects the trajectory color palette.
 - `Pulse` in `VISUAL` selects the current-point pulse animation.
 - `Depth`, `Line`, `Trail`, and `Decay` in `VISUAL` shape the trajectory rendering.
