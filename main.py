@@ -4,6 +4,7 @@ import argparse
 import ctypes
 from pathlib import Path
 
+import numpy as np
 import pygame
 
 import config
@@ -13,7 +14,6 @@ from math_core.lyapunov import LyapunovEstimator
 from math_core.vector_utils import acceleration, curvature, speed
 from music.mapper import MusicMapper
 from music.music_engine import MusicEngine
-from music.scales import SCALES
 from presets.presets import PRESETS, Preset
 from systems import HalvorsenSystem, HenonMap, LogisticMap, LorenzSystem, RosslerSystem
 from systems.base_system import BaseSystem
@@ -171,14 +171,20 @@ class ChaoticAttractorMusicLab:
         steps_to_run = int(self.simulation_credit)
         self.simulation_credit -= steps_to_run
         for _ in range(steps_to_run):
-            if self.system.is_discrete:
-                point = self.system.update()
-            else:
-                self.system.set_state(rk4_step(self.system, self.system.current_point(), config.DEFAULT_DT))
-                point = self.system.current_point()
+            with np.errstate(over="ignore", invalid="ignore"):
+                if self.system.is_discrete:
+                    point = self.system.update()
+                else:
+                    self.system.set_state(rk4_step(self.system, self.system.current_point(), config.DEFAULT_DT))
+                    point = self.system.current_point()
+            if not self._valid_point(point):
+                self._recover_invalid_state()
+                break
 
             lyapunov_raw = self.lyapunov.step() if self.chaos_mode else 0.0
             lyapunov_value = lyapunov_raw * self.chaos_influence
+            if not np.isfinite(lyapunov_value):
+                lyapunov_value = 0.0
             current_speed = speed(self.previous_point, point, config.DEFAULT_DT)
             current_acceleration = acceleration(self.previous_speed, current_speed, config.DEFAULT_DT)
             self.points_for_curvature.append(point.copy())
@@ -200,6 +206,19 @@ class ChaoticAttractorMusicLab:
             self.renderer.append_point(point, current_speed, lyapunov_value)
             self.previous_point = point.copy()
             self.previous_speed = current_speed
+
+    def _valid_point(self, point: object) -> bool:
+        values = np.asarray(point, dtype=np.float64)
+        return bool(values.size > 0 and np.all(np.isfinite(values)) and np.linalg.norm(values) < 1e6)
+
+    def _recover_invalid_state(self) -> None:
+        self.system = create_system(self.preset)
+        self.lyapunov = LyapunovEstimator(self.system)
+        self.renderer.reset_trail()
+        self.previous_point = None
+        self.previous_speed = 0.0
+        self.points_for_curvature = []
+        self.simulation_credit = 0.0
 
     def _handle_events(self) -> None:
         for event in pygame.event.get():
@@ -235,16 +254,16 @@ class ChaoticAttractorMusicLab:
             save_logistic_bifurcation(Path(config.EXPORT_DIR) / config.BIFURCATION_IMAGE)
         elif action == "chaos":
             self.chaos_mode = not self.chaos_mode
-        elif action == "scale":
-            self._cycle_scale()
+        elif action.startswith("scale:"):
+            self.mapper.scale_name = action.split(":", maxsplit=1)[1]
         elif action == "auto_camera":
             self.auto_camera = not self.auto_camera
         elif action.startswith("visual_style:"):
             self.renderer.visual_style = action.split(":", maxsplit=1)[1]
         elif action.startswith("pulse_style:"):
             self.renderer.pulse_style = action.split(":", maxsplit=1)[1]
-        elif action == "trail_decay":
-            self.renderer.cycle_trail_decay_mode()
+        elif action.startswith("trail_decay:"):
+            self.renderer.trail_decay_mode = action.split(":", maxsplit=1)[1]
         elif action == "multi_voice":
             self.mapper.multi_voice = not self.mapper.multi_voice
         elif action == "toggle_panel":
@@ -278,11 +297,6 @@ class ChaoticAttractorMusicLab:
             self.mapper.fuzz_amount = float(value)
         elif action.startswith("parameter:") and value is not None:
             self._set_parameter_by_index(int(action.split(":", maxsplit=1)[1]), float(value))
-
-    def _cycle_scale(self) -> None:
-        names = list(SCALES)
-        current = names.index(self.mapper.scale_name) if self.mapper.scale_name in names else 0
-        self.mapper.scale_name = names[(current + 1) % len(names)]
 
     def _handle_key(self, key: int) -> None:
         if key == pygame.K_ESCAPE:

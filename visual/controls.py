@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pygame
 
 import config
+from music.scales import SCALES
 from presets.presets import PRESETS
 
 
@@ -111,6 +112,7 @@ class Slider:
         self.action = action
         self.integer = integer
         self.dragging = False
+        self.visible = True
 
     def set_value_from_pos(self, x: int) -> float:
         ratio = (x - self.rect.left) / max(1, self.rect.width)
@@ -123,6 +125,8 @@ class Slider:
         return int(self.rect.left + max(0.0, min(1.0, ratio)) * self.rect.width)
 
     def draw(self, surface: pygame.Surface, small_font: pygame.font.Font) -> None:
+        if not self.visible:
+            return
         value_text = f"{int(self.value)}" if self.integer else f"{self.value:.2f}"
         label = small_font.render(f"{self.label}: {value_text}", True, config.TEXT_COLOR)
         label_rect = pygame.Rect(self.rect.left - 2, self.rect.top, min(self.rect.width + 4, max(110, label.get_width() + 12)), 17)
@@ -148,6 +152,8 @@ class ControlPanel:
         self.sliders: list[Slider] = []
         self.panel_toggle_button = Button(pygame.Rect(0, 0, 76, 30), "Panel", "toggle_panel")
         self.panel_hidden = False
+        self.system_slider_area = pygame.Rect(0, 0, 1, 1)
+        self.row_gap = 32
         self._build()
 
     def resize(self, width: int, height: int) -> None:
@@ -215,6 +221,8 @@ class ControlPanel:
         self.top_section_titles = ["ATTRACTOR", "CONTROLS"]
         y3 = section_top + 26
         row_gap = 32
+        self.row_gap = row_gap
+        self.system_slider_area = pygame.Rect(left_x, y3, column_w, section_height - 44)
         system_gap = 14
         system_w = (column_w - system_gap) // 2
         system_right_x = left_x + system_w + system_gap
@@ -244,8 +252,13 @@ class ControlPanel:
         ]
         music_button_y = y3 + row_gap * 5 + 6
         self.buttons.append(Button(pygame.Rect(middle_x, music_button_y, 72, button_h), "Voice", "multi_voice"))
-        self.buttons.append(Button(pygame.Rect(middle_x + 80, music_button_y, 96, button_h), "Scale", "scale"))
-        self.buttons.append(Button(pygame.Rect(middle_x + 184, music_button_y, 72, button_h), "Chaos", "chaos"))
+        self.buttons.append(Button(pygame.Rect(middle_x + 80, music_button_y, 72, button_h), "Chaos", "chaos"))
+        scale_y = music_button_y + button_h + 10
+        scale_names = list(SCALES)
+        scale_w = max(48, (column_w - 6 * (len(scale_names) - 1)) // len(scale_names))
+        for index, scale_name in enumerate(scale_names):
+            rect = pygame.Rect(middle_x + index * (scale_w + 6), scale_y, scale_w, button_h)
+            self.buttons.append(Button(rect, self._short_scale(scale_name).title(), f"scale:{scale_name}"))
         style_y = y3
         style_gap = 6
         style_w = max(56, (right_w - style_gap * (len(config.VISUAL_STYLES) - 1)) // len(config.VISUAL_STYLES))
@@ -259,7 +272,11 @@ class ControlPanel:
             self.buttons.append(Button(rect, pulse_name.title(), f"pulse_style:{pulse_name}"))
         visual_button_y = pulse_y + button_h + 20
         self.buttons.append(Button(pygame.Rect(right_x, visual_button_y, 96, button_h), "Auto Cam", "auto_camera"))
-        self.buttons.append(Button(pygame.Rect(right_x + 104, visual_button_y, 96, button_h), "Decay", "trail_decay"))
+        decay_x = right_x + 104
+        decay_w = 72
+        for index, decay_name in enumerate(config.TRAIL_DECAY_MODES):
+            rect = pygame.Rect(decay_x + index * (decay_w + 6), visual_button_y, decay_w, button_h)
+            self.buttons.append(Button(rect, decay_name.title(), f"trail_decay:{decay_name}"))
         control_left = transport_start - 8
         control_width = min(self.width - edge - control_left - 8, max(160, controls_right - transport_start + 16))
         self.top_section_rects = [
@@ -275,24 +292,25 @@ class ControlPanel:
                 button.active = state.paused
             elif button.action == "chaos":
                 button.active = state.chaos_mode
-            elif button.action == "scale":
-                button.label = f"Scale: {self._short_scale(state.scale_name)}"
+            elif button.action.startswith("scale:"):
+                button.active = button.action.split(":", maxsplit=1)[1] == state.scale_name
             elif button.action == "auto_camera":
                 button.active = state.auto_camera
             elif button.action.startswith("visual_style:"):
                 button.active = button.action.split(":", maxsplit=1)[1] == state.visual_style
             elif button.action.startswith("pulse_style:"):
                 button.active = button.action.split(":", maxsplit=1)[1] == state.pulse_style
-            elif button.action == "trail_decay":
-                button.label = f"Decay: {state.trail_decay_mode.title()}"
-                button.active = state.trail_decay_mode == "fade"
+            elif button.action.startswith("trail_decay:"):
+                button.active = button.action.split(":", maxsplit=1)[1] == state.trail_decay_mode
             elif button.action == "multi_voice":
                 button.active = state.multi_voice
         self.panel_toggle_button.active = state.performance_mode
         self.panel_toggle_button.label = "Show" if state.performance_mode else "Hide"
 
         parameter_items = list(state.parameter_values.items())
+        self._layout_parameter_sliders(len(parameter_items))
         for slider in self.sliders:
+            slider.visible = True
             if slider.action == "speed":
                 slider.value = state.steps_per_frame
             elif slider.action == "density":
@@ -333,6 +351,7 @@ class ControlPanel:
                     slider.minimum = 0.0
                     slider.maximum = 1.0
                     slider.value = 0.0
+                    slider.visible = False
 
     def draw(self, surface: pygame.Surface, state: UIState) -> None:
         self.sync(state)
@@ -367,6 +386,8 @@ class ControlPanel:
                 if button.rect.collidepoint(event.pos):
                     return button.action, None
             for slider in self.sliders:
+                if not slider.visible:
+                    continue
                 if slider.rect.inflate(0, 20).collidepoint(event.pos):
                     slider.dragging = True
                     return slider.action, slider.set_value_from_pos(event.pos[0])
@@ -375,11 +396,15 @@ class ControlPanel:
             if self.panel_hidden:
                 return None
             for slider in self.sliders:
+                if not slider.visible:
+                    continue
                 if slider.dragging:
                     return slider.action, slider.set_value_from_pos(event.pos[0])
 
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             for slider in self.sliders:
+                if not slider.visible:
+                    continue
                 slider.dragging = False
         return None
 
@@ -430,10 +455,8 @@ class ControlPanel:
             "defaults": "Restore current preset defaults",
             "save_midi": "Record/export generated notes to MIDI",
             "chaos": "Toggle Lyapunov chaos influence",
-            "scale": "Cycle musical scale",
             "auto_camera": "Rotate camera automatically",
             "multi_voice": "Toggle extra musical voices",
-            "trail_decay": "Toggle hard or fading trail",
             "toggle_panel": "Show or hide the lower control panel",
         }
 
@@ -465,10 +488,16 @@ class ControlPanel:
                     return "Select trajectory color palette"
                 if button.action.startswith("pulse_style:"):
                     return "Select current-point pulse animation"
+                if button.action.startswith("scale:"):
+                    return "Select musical scale"
+                if button.action.startswith("trail_decay:"):
+                    return "Select trail decay mode"
                 return self._button_tooltips().get(button.action)
         if self.panel_toggle_button.rect.collidepoint(mouse_pos):
             return self._button_tooltips().get(self.panel_toggle_button.action)
         for slider in self.sliders:
+            if not slider.visible:
+                continue
             if slider.rect.inflate(0, 24).collidepoint(mouse_pos):
                 if slider.action.startswith("parameter:"):
                     return self._parameter_tooltip(slider.label)
@@ -486,6 +515,24 @@ class ControlPanel:
             "r": "Logistic: growth parameter",
             "r_step": "Logistic: how fast r advances",
         }.get(label)
+
+    def _layout_parameter_sliders(self, count: int) -> None:
+        parameter_sliders = [slider for slider in self.sliders if slider.action.startswith("parameter:")]
+        if count <= 0:
+            for slider in parameter_sliders:
+                slider.visible = False
+            return
+        if count <= 3:
+            for index, slider in enumerate(parameter_sliders):
+                slider.rect = pygame.Rect(self.system_slider_area.left, self.system_slider_area.top + self.row_gap * index, self.system_slider_area.width, 28)
+        else:
+            gap = 14
+            width = (self.system_slider_area.width - gap) // 2
+            for index, slider in enumerate(parameter_sliders):
+                column = index // 3
+                row = index % 3
+                x = self.system_slider_area.left + column * (width + gap)
+                slider.rect = pygame.Rect(x, self.system_slider_area.top + self.row_gap * row, width, 28)
 
     def _short_scale(self, scale_name: str) -> str:
         names = {

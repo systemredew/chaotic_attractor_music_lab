@@ -39,6 +39,8 @@ class MusicMapper:
         return SCALES[self.scale_name]
 
     def normalize(self, value: float, min_value: float, max_value: float) -> float:
+        if not np.isfinite(value):
+            return 0.0
         if abs(max_value - min_value) < 1e-12:
             return 0.0
         return float(np.clip((value - min_value) / (max_value - min_value), 0.0, 1.0))
@@ -61,7 +63,7 @@ class MusicMapper:
         acceleration: float = 0.0,
         curvature: float = 0.0,
     ) -> NoteEvent:
-        values = np.asarray(state, dtype=np.float64)
+        values = np.nan_to_num(np.asarray(state, dtype=np.float64), nan=0.0, posinf=0.0, neginf=0.0)
         x = float(values[0]) if values.size > 0 else 0.0
         y = float(values[1]) if values.size > 1 else x
         z = float(values[2]) if values.size > 2 else 0.0
@@ -87,6 +89,8 @@ class MusicMapper:
 
         note = self.map_to_scale(pitch_value)
         note = int(np.clip(note + octave_shift, 0, 127))
+        acceleration = 0.0 if not np.isfinite(acceleration) else acceleration
+        curvature = 0.0 if not np.isfinite(curvature) else curvature
         velocity = self.speed_to_velocity(speed) + int(min(acceleration, 180.0) / 180.0 * 18)
         velocity = int(np.clip(velocity, 28, 124))
         density = self.chaos_to_density(lyapunov_value) + min(curvature / np.pi, 1.0) * 0.15
@@ -101,13 +105,19 @@ class MusicMapper:
         )
 
     def speed_to_velocity(self, speed: float) -> int:
+        if not np.isfinite(speed):
+            speed = 0.0
         value = self.normalize(speed, 0.0, 90.0)
         return int(35 + value * 70)
 
     def chaos_to_density(self, lyapunov_value: float) -> float:
+        if not np.isfinite(lyapunov_value):
+            lyapunov_value = 0.0
         return float(np.clip((lyapunov_value + 0.5) / 3.5, 0.08, 1.0))
 
     def logistic_to_note(self, x: float, r: float) -> NoteEvent:
+        x = 0.5 if not np.isfinite(x) else x
+        r = 3.7 if not np.isfinite(r) else r
         tension = self.normalize(r, config.BIFURCATION_R_MIN, config.BIFURCATION_R_MAX)
         scale = SCALES["major"] if tension < 0.52 else SCALES["natural_minor"]
         note = self.map_to_scale(float(np.clip(x, 0.0, 1.0)), scale=scale, octaves=5)

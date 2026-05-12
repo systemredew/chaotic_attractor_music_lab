@@ -42,15 +42,20 @@ class LyapunovEstimator:
 
     def step(self) -> float:
         self.iteration += 1
-        if self.system.is_discrete:
-            self.reference = self._map_next(self.reference)
-            self.neighbor = self._map_next(self.neighbor)
-        else:
-            self.reference = rk4_step(self.system, self.reference, self.dt)
-            self.neighbor = rk4_step(self.system, self.neighbor, self.dt)
+        with np.errstate(over="ignore", invalid="ignore"):
+            if self.system.is_discrete:
+                self.reference = self._map_next(self.reference)
+                self.neighbor = self._map_next(self.neighbor)
+            else:
+                self.reference = rk4_step(self.system, self.reference, self.dt)
+                self.neighbor = rk4_step(self.system, self.neighbor, self.dt)
+
+        if not (np.all(np.isfinite(self.reference)) and np.all(np.isfinite(self.neighbor))):
+            self.reset()
+            return self.current()
 
         distance = float(np.linalg.norm(self.neighbor - self.reference))
-        if distance <= 1e-15:
+        if distance <= 1e-15 or not math.isfinite(distance):
             return self.current()
 
         if self.iteration % self.renormalize_every == 0:
@@ -63,7 +68,8 @@ class LyapunovEstimator:
         if not self.values:
             return 0.0
         time_scale = self.renormalize_every * (self.dt if not self.system.is_discrete else 1.0)
-        return float(sum(self.values) / (len(self.values) * time_scale))
+        value = float(sum(self.values) / (len(self.values) * time_scale))
+        return value if math.isfinite(value) else 0.0
 
     def _map_next(self, state: Array) -> Array:
         return self.system.next_state(state)  # type: ignore[attr-defined]

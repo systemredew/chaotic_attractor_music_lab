@@ -91,10 +91,6 @@ class Renderer:
         self.trail_limit = limit
         self.trail = deque(self.trail, maxlen=limit)
 
-    def cycle_trail_decay_mode(self) -> None:
-        index = config.TRAIL_DECAY_MODES.index(self.trail_decay_mode) if self.trail_decay_mode in config.TRAIL_DECAY_MODES else 0
-        self.trail_decay_mode = config.TRAIL_DECAY_MODES[(index + 1) % len(config.TRAIL_DECAY_MODES)]
-
     def trigger_note_pulse(self) -> None:
         self.pulse_power = 1.0
 
@@ -217,9 +213,14 @@ class Renderer:
 
     def _draw_3d_trail(self, system_name: str) -> None:
         previous: tuple[int, int] | None = None
-        trail_points = list(self.trail)
-        total = max(1, len(trail_points) - 1)
-        for index, (point, point_speed, chaos) in enumerate(trail_points):
+        trail_len = len(self.trail)
+        if trail_len == 0:
+            return
+        stride = max(1, trail_len // config.MAX_RENDERED_TRAIL_SEGMENTS)
+        total = max(1, trail_len - 1)
+        for index, (point, point_speed, chaos) in enumerate(self.trail):
+            if index % stride != 0 and index != trail_len - 1:
+                continue
             projected_point = self._point_to_3d(point, system_name)
             x, y, depth = self.camera.project_with_depth(projected_point)
             projected = (x, y)
