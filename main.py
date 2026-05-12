@@ -109,6 +109,8 @@ class ChaoticAttractorMusicLab:
         self.renderer.camera.rotation_x = 0.65
         self.renderer.camera.rotation_y = -0.55
         self.renderer.camera.zoom = 9.6
+        self.renderer.camera.offset_x = 0.0
+        self.renderer.camera.offset_y = 0.0
         self.renderer.set_trail_limit(config.TRAIL_LIMIT)
         self.lyapunov = LyapunovEstimator(self.system)
         self.renderer.reset_trail()

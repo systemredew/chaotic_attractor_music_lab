@@ -50,6 +50,7 @@ class MusicEngine:
             [0.0, 1.0],
             [config.MAX_NOTE_COOLDOWN, config.MIN_NOTE_COOLDOWN],
         )
+        cooldown *= config.DEFAULT_TEMPO_BPM / max(config.MIN_BPM, self.tempo_bpm)
         if self.muted or now - self.last_note_time < cooldown:
             return False
         self.last_note_time = now
@@ -72,6 +73,7 @@ class MusicEngine:
             [0.0, 1.0],
             [config.MAX_NOTE_COOLDOWN, config.MIN_NOTE_COOLDOWN],
         )
+        cooldown *= config.DEFAULT_TEMPO_BPM / max(config.MIN_BPM, self.tempo_bpm)
         if self.muted or now - self.last_note_time < cooldown:
             return False
         self.last_note_time = now
@@ -107,6 +109,9 @@ class MusicEngine:
         t = np.linspace(0.0, event.duration, n_samples, False)
         envelope = np.minimum(1.0, np.linspace(0.0, 12.0, n_samples)) * np.linspace(1.0, 0.0, n_samples)
         wave = np.sin(2.0 * math.pi * frequency * t) * envelope * (event.velocity / 127.0)
+        if event.fuzz > 0.01:
+            drive = 1.0 + event.fuzz * 8.0
+            wave = np.tanh(wave * drive) / np.tanh(drive)
         sound = pygame.sndarray.make_sound((wave * 32767).astype(np.int16))
         sound.play()
 

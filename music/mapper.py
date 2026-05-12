@@ -16,6 +16,7 @@ class NoteEvent:
     velocity: int
     duration: float
     density: float
+    fuzz: float = 0.0
     channel: int = config.DEFAULT_CHANNEL
 
 
@@ -65,26 +66,26 @@ class MusicMapper:
 
         if system_name == "Lorenz":
             pitch_value = self.normalize(x, -30.0, 30.0)
-            volume_value = self.normalize(y, -35.0, 35.0)
+            fuzz_value = self.normalize(abs(y), 0.0, 35.0)
             octave_shift = round(self.normalize(z, 0.0, 55.0) * 12)
         elif system_name == "Rossler":
             pitch_value = self.normalize(x, -15.0, 15.0)
-            volume_value = self.normalize(y, -15.0, 15.0)
+            fuzz_value = self.normalize(abs(y), 0.0, 15.0)
             octave_shift = round(self.normalize(z, 0.0, 30.0) * 7)
         elif system_name == "Henon":
             pitch_value = self.normalize(x, -1.5, 1.5)
-            volume_value = self.normalize(abs(y), 0.0, 0.45)
+            fuzz_value = self.normalize(abs(y), 0.0, 0.45)
             octave_shift = 0
         else:
             return self.logistic_to_note(float(values[1] if values.size > 1 else values[0]), float(values[0] if values.size > 1 else 3.7))
 
         note = self.map_to_scale(pitch_value)
         note = int(np.clip(note + octave_shift, 0, 127))
-        velocity = self.speed_to_velocity(speed) + int(volume_value * 28) + int(min(acceleration, 180.0) / 180.0 * 18)
+        velocity = self.speed_to_velocity(speed) + int(min(acceleration, 180.0) / 180.0 * 18)
         velocity = int(np.clip(velocity, 28, 124))
         density = self.chaos_to_density(lyapunov_value) + min(curvature / np.pi, 1.0) * 0.15
         duration = self._duration(float(np.clip(config.DEFAULT_NOTE_DURATION * (1.4 - density), 0.06, 0.6)))
-        return NoteEvent(note=note, velocity=velocity, duration=duration, density=float(np.clip(density, 0.05, 1.0)))
+        return NoteEvent(note=note, velocity=velocity, duration=duration, density=float(np.clip(density, 0.05, 1.0)), fuzz=fuzz_value)
 
     def speed_to_velocity(self, speed: float) -> int:
         value = self.normalize(speed, 0.0, 90.0)
@@ -100,7 +101,7 @@ class MusicMapper:
         velocity = int(np.clip(38 + tension * 70 + abs(x - 0.5) * 25, 25, 127))
         density = float(np.clip(0.15 + tension * 0.85, 0.1, 1.0))
         subdivision = self._duration(0.5 if r < 3.0 else 0.33 if r < 3.55 else 0.16)
-        return NoteEvent(note=note, velocity=velocity, duration=subdivision, density=density)
+        return NoteEvent(note=note, velocity=velocity, duration=subdivision, density=density, fuzz=abs(x - 0.5) * 2.0)
 
     def state_to_events(
         self,
@@ -116,20 +117,20 @@ class MusicMapper:
         lead = self.state_to_note(state, system_name, lyapunov_value, speed, acceleration, curvature)
         self._event_counter += 1
         if self.swing > 0.0 and self._event_counter % 2 == 0:
-            lead = NoteEvent(lead.note, lead.velocity, lead.duration * (1.0 + self.swing * 0.5), lead.density, lead.channel)
+            lead = NoteEvent(lead.note, lead.velocity, lead.duration * (1.0 + self.swing * 0.5), lead.density, lead.fuzz, lead.channel)
         if not self.multi_voice:
             return [lead]
 
         events = [lead]
         if system_name == "Rossler":
-            bass = NoteEvent(max(0, lead.note - 24), max(22, lead.velocity - 36), lead.duration * 2.6, max(0.05, lead.density * 0.35), 1)
+            bass = NoteEvent(max(0, lead.note - 24), max(22, lead.velocity - 36), lead.duration * 2.6, max(0.05, lead.density * 0.35), lead.fuzz * 0.45, 1)
             events.append(bass)
         elif system_name == "Henon":
             perc_note = 36 + (lead.note % 12)
-            events.append(NoteEvent(perc_note, min(127, lead.velocity + 12), max(0.035, lead.duration * 0.35), min(1.0, lead.density + 0.2), 9))
+            events.append(NoteEvent(perc_note, min(127, lead.velocity + 12), max(0.035, lead.duration * 0.35), min(1.0, lead.density + 0.2), lead.fuzz, 9))
         elif lyapunov_value > 0.35:
             interval = 7 if curvature < 1.2 else 10
-            harmony = NoteEvent(min(127, lead.note + interval), max(24, lead.velocity - 24), lead.duration * 1.35, lead.density * 0.55, 2)
+            harmony = NoteEvent(min(127, lead.note + interval), max(24, lead.velocity - 24), lead.duration * 1.35, lead.density * 0.55, lead.fuzz * 0.7, 2)
             events.append(harmony)
         return events
 

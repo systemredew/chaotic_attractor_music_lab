@@ -79,15 +79,11 @@ class Button:
         pygame.draw.polygon(surface, config.TEXT_COLOR, points)
 
     def _draw_reset_icon(self, surface: pygame.Surface) -> None:
-        radius = self.rect.height // 3
         center = self.rect.center
-        arc_rect = pygame.Rect(center[0] - radius, center[1] - radius, radius * 2, radius * 2)
-        pygame.draw.arc(surface, config.TEXT_COLOR, arc_rect, 0.25, 5.15, 2)
-        arrow = [
-            (center[0] + radius - 2, center[1] - 7),
-            (center[0] + radius + 6, center[1] - 2),
-            (center[0] + radius - 1, center[1] + 4),
-        ]
+        radius = 8
+        pygame.draw.circle(surface, config.TEXT_COLOR, center, radius, 2)
+        pygame.draw.circle(surface, config.UI_PANEL_COLOR, (center[0] + 5, center[1] - 7), 5)
+        arrow = [(center[0] + 8, center[1] - 10), (center[0] + 13, center[1] - 4), (center[0] + 5, center[1] - 3)]
         pygame.draw.polygon(surface, config.TEXT_COLOR, arrow)
 
 
@@ -153,58 +149,79 @@ class ControlPanel:
         self._build()
 
     def _build(self) -> None:
-        panel_top = self.height - config.UI_PANEL_HEIGHT
-        x = config.UI_MARGIN
-        y = panel_top + 34
+        edge = config.UI_EDGE_MARGIN
+        panel_top = self.height - config.UI_PANEL_HEIGHT + edge
+        inset = edge + config.UI_PANEL_INSET
+        x = inset
+        y = panel_top + 40
         button_h = 28
         button_gap = 6
-        preset_w = max(100, min(112, (self.width - config.UI_MARGIN * 2 - button_gap * 4) // 5))
+        preset_w = max(82, min(104, (self.width // 2 - inset * 2 - button_gap * 4) // 5))
         self.buttons = []
         preset_labels = ["Calm", "Butterfly", "Drone", "Henon", "Bifurcation"]
         for index, _preset in enumerate(PRESETS):
             self.buttons.append(Button(pygame.Rect(x, y, preset_w, button_h), f"{index + 1} {preset_labels[index]}", f"preset:{index}"))
             x += preset_w + button_gap
 
-        y2 = y + button_h + 10
-        x2 = config.UI_MARGIN
+        attractor_end = x - button_gap
+        x2 = attractor_end + 34
+        y2 = y
+        transport_start = x2
+        max_controls_right = self.width - edge - inset
         for label, action, width in [
             ("", "pause", 46),
             ("", "reset", 46),
             ("Default", "defaults", 72),
-            ("MIDI", "save_midi", 62),
-            ("Shot", "screenshot", 62),
+            ("Rec", "save_midi", 62),
             ("Bifurc.", "bifurcation", 74),
             ("Chaos", "chaos", 66),
             ("Scale", "scale", 88),
-            ("Auto", "auto_camera", 62),
+            ("Auto Cam", "auto_camera", 86),
             ("Style", "visual_style", 66),
             ("Voice", "multi_voice", 62),
             ("Perf", "performance", 58),
         ]:
+            if x2 + width > max_controls_right:
+                x2 = transport_start
+                y2 += button_h + 8
             self.buttons.append(Button(pygame.Rect(x2, y2, width, button_h), label, action))
             x2 += width + button_gap
+        transport_end = x2 - button_gap
 
-        left_x = config.UI_MARGIN
-        middle_x = max(390, self.width // 3 + 20)
-        right_x = max(720, (self.width // 3) * 2 + 20)
-        column_w = max(280, min(360, (self.width - config.UI_MARGIN * 2 - 52) // 3))
-        right_w = max(260, self.width - right_x - config.UI_MARGIN)
-        y3 = y2 + button_h + 42
-        row_gap = 42
+        left_x = inset
+        middle_x = max(390, self.width // 3 + 24)
+        right_x = max(720, (self.width // 3) * 2 + 24)
+        column_w = max(280, min(360, (self.width - inset * 2 - edge * 2 - 60) // 3))
+        right_w = max(260, self.width - right_x - inset - edge)
+        section_top = panel_top + 124
+        section_height = self.height - edge - section_top - 16
+        self.section_rects = [
+            pygame.Rect(left_x - 8, section_top, column_w + 16, section_height),
+            pygame.Rect(middle_x - 8, section_top, column_w + 16, section_height),
+            pygame.Rect(right_x - 8, section_top, right_w + 16, section_height),
+        ]
+        self.section_titles = ["SYSTEM", "MUSIC", "VISUAL"]
+        self.top_section_rects = [
+            pygame.Rect(inset - 8, y - 18, attractor_end - inset + 16, button_h + 32),
+            pygame.Rect(transport_start - 8, y - 18, max(160, transport_end - transport_start + 16), (y2 - y) + button_h + 32),
+        ]
+        self.top_section_titles = ["ATTRACTOR", "CONTROLS"]
+        y3 = section_top + 48
+        row_gap = 30
         self.sliders = [
-            Slider(pygame.Rect(left_x, y3, column_w, 22), "Speed", config.MIN_STEPS_PER_FRAME, config.MAX_STEPS_PER_FRAME, config.DEFAULT_STEPS_PER_FRAME, "speed", True),
-            Slider(pygame.Rect(left_x, y3 + row_gap, column_w, 22), "Density", config.MIN_DENSITY_MULTIPLIER, config.MAX_DENSITY_MULTIPLIER, 1.0, "density"),
-            Slider(pygame.Rect(left_x, y3 + row_gap * 2, column_w, 22), "Root", config.MIN_ROOT_NOTE, config.MAX_ROOT_NOTE, config.DEFAULT_ROOT_NOTE, "root_note", True),
-            Slider(pygame.Rect(middle_x, y3, column_w, 22), "Chaos influence", config.MIN_CHAOS_INFLUENCE, config.MAX_CHAOS_INFLUENCE, 1.0, "chaos_influence"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap, column_w, 22), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
+            Slider(pygame.Rect(left_x, y3, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:0"),
+            Slider(pygame.Rect(left_x, y3 + row_gap, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:1"),
+            Slider(pygame.Rect(left_x, y3 + row_gap * 2, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:2"),
+            Slider(pygame.Rect(middle_x, y3, column_w, 22), "Tone", config.MIN_ROOT_NOTE, config.MAX_ROOT_NOTE, config.DEFAULT_ROOT_NOTE, "root_note", True),
+            Slider(pygame.Rect(middle_x, y3 + row_gap, column_w, 22), "Density", config.MIN_DENSITY_MULTIPLIER, config.MAX_DENSITY_MULTIPLIER, 1.0, "density"),
             Slider(pygame.Rect(middle_x, y3 + row_gap * 2, column_w, 22), "BPM", config.MIN_BPM, config.MAX_BPM, config.DEFAULT_TEMPO_BPM, "bpm", True),
-            Slider(pygame.Rect(right_x, y3, right_w, 22), "Length", config.MIN_NOTE_LENGTH_MULTIPLIER, config.MAX_NOTE_LENGTH_MULTIPLIER, 1.0, "note_length"),
-            Slider(pygame.Rect(right_x, y3 + row_gap, right_w, 22), "Octaves", config.MIN_OCTAVE_RANGE, config.MAX_OCTAVE_RANGE, 4, "octave_range", True),
-            Slider(pygame.Rect(right_x, y3 + row_gap * 2, right_w, 22), "Probability", config.MIN_NOTE_PROBABILITY, config.MAX_NOTE_PROBABILITY, 1.0, "note_probability"),
-            Slider(pygame.Rect(left_x, y3 + row_gap * 3, column_w, 22), "Swing", config.MIN_SWING, config.MAX_SWING, 0.0, "swing"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 3, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:0"),
-            Slider(pygame.Rect(left_x, y3 + row_gap * 4, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:1"),
-            Slider(pygame.Rect(middle_x, y3 + row_gap * 4, column_w, 22), "Param", 0.0, 1.0, 0.0, "parameter:2"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 3, column_w, 22), "Length", config.MIN_NOTE_LENGTH_MULTIPLIER, config.MAX_NOTE_LENGTH_MULTIPLIER, 1.0, "note_length"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 4, column_w, 22), "Octaves", config.MIN_OCTAVE_RANGE, config.MAX_OCTAVE_RANGE, 4, "octave_range", True),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 5, column_w, 22), "Probability", config.MIN_NOTE_PROBABILITY, config.MAX_NOTE_PROBABILITY, 1.0, "note_probability"),
+            Slider(pygame.Rect(middle_x, y3 + row_gap * 6, column_w, 22), "Swing", config.MIN_SWING, config.MAX_SWING, 0.0, "swing"),
+            Slider(pygame.Rect(right_x, y3, right_w, 22), "Speed", config.MIN_STEPS_PER_FRAME, config.MAX_STEPS_PER_FRAME, config.DEFAULT_STEPS_PER_FRAME, "speed", True),
+            Slider(pygame.Rect(right_x, y3 + row_gap, right_w, 22), "Trail", config.MIN_TRAIL_LIMIT, config.MAX_TRAIL_LIMIT, config.TRAIL_LIMIT, "trail_limit", True),
+            Slider(pygame.Rect(right_x, y3 + row_gap * 2, right_w, 22), "Chaos influence", config.MIN_CHAOS_INFLUENCE, config.MAX_CHAOS_INFLUENCE, 1.0, "chaos_influence"),
         ]
 
     def sync(self, state: UIState) -> None:
@@ -267,18 +284,20 @@ class ControlPanel:
         self.sync(state)
         if state.performance_mode:
             return
-        panel_rect = pygame.Rect(0, self.height - config.UI_PANEL_HEIGHT, self.width, config.UI_PANEL_HEIGHT)
+        edge = config.UI_EDGE_MARGIN
+        panel_rect = pygame.Rect(edge, self.height - config.UI_PANEL_HEIGHT + edge, self.width - edge * 2, config.UI_PANEL_HEIGHT - edge * 2)
         panel_surface = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
         panel_surface.fill((*config.UI_BACKGROUND_COLOR, config.UI_BACKGROUND_ALPHA))
         surface.blit(panel_surface, panel_rect.topleft)
-        pygame.draw.line(surface, config.UI_BORDER_COLOR, panel_rect.topleft, panel_rect.topright, 1)
-        title = self.small_font.render("Controls: drag scene to rotate camera, mouse wheel to zoom", True, config.MUTED_TEXT_COLOR)
-        surface.blit(title, (config.UI_MARGIN, panel_rect.top + 14))
+        pygame.draw.rect(surface, config.UI_BORDER_COLOR, panel_rect, 1, border_radius=config.UI_RADIUS)
+        self._draw_sections(surface)
+        self._draw_top_sections(surface)
         mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
             button.draw(surface, self.font, mouse_pos)
         for slider in self.sliders:
             slider.draw(surface, self.small_font)
+        self._draw_tooltip(surface, mouse_pos)
 
     def handle_event(self, event: pygame.event.Event) -> tuple[str, float | None] | None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -299,6 +318,98 @@ class ControlPanel:
             for slider in self.sliders:
                 slider.dragging = False
         return None
+
+    def _draw_sections(self, surface: pygame.Surface) -> None:
+        for rect, title in zip(self.section_rects, self.section_titles):
+            section_surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(section_surface, (5, 9, 14, 78), section_surface.get_rect(), border_radius=config.UI_RADIUS)
+            surface.blit(section_surface, rect.topleft)
+            pygame.draw.rect(surface, config.UI_BORDER_COLOR, rect, 1, border_radius=config.UI_RADIUS)
+            text = self.small_font.render(title, True, config.UI_ACCENT_COLOR)
+            label_rect = pygame.Rect(rect.left + 10, rect.top - 10, text.get_width() + 14, 20)
+            label_surface = pygame.Surface(label_rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(label_surface, (*config.UI_BACKGROUND_COLOR, 215), label_surface.get_rect(), border_radius=5)
+            surface.blit(label_surface, label_rect.topleft)
+            surface.blit(text, (label_rect.left + 7, label_rect.top + 2))
+
+    def _draw_top_sections(self, surface: pygame.Surface) -> None:
+        for rect, title in zip(self.top_section_rects, self.top_section_titles):
+            pygame.draw.rect(surface, config.UI_BORDER_COLOR, rect, 1, border_radius=config.UI_RADIUS)
+            text = self.small_font.render(title, True, config.UI_ACCENT_COLOR)
+            label_rect = pygame.Rect(rect.left + 10, rect.top - 10, text.get_width() + 14, 20)
+            label_surface = pygame.Surface(label_rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(label_surface, (*config.UI_BACKGROUND_COLOR, 215), label_surface.get_rect(), border_radius=5)
+            surface.blit(label_surface, label_rect.topleft)
+            surface.blit(text, (label_rect.left + 7, label_rect.top + 2))
+
+    def _draw_tooltip(self, surface: pygame.Surface, mouse_pos: tuple[int, int]) -> None:
+        text = self._tooltip_text(mouse_pos)
+        if not text:
+            return
+        rendered = self.small_font.render(text, True, config.TEXT_COLOR)
+        padding = 8
+        rect = pygame.Rect(mouse_pos[0] + 14, mouse_pos[1] - 34, rendered.get_width() + padding * 2, 26)
+        if rect.right > self.width - config.UI_EDGE_MARGIN:
+            rect.right = self.width - config.UI_EDGE_MARGIN
+        if rect.left < config.UI_EDGE_MARGIN:
+            rect.left = config.UI_EDGE_MARGIN
+        tooltip_surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(tooltip_surface, (5, 8, 14, 232), tooltip_surface.get_rect(), border_radius=5)
+        surface.blit(tooltip_surface, rect.topleft)
+        pygame.draw.rect(surface, config.UI_ACCENT_COLOR, rect, 1, border_radius=5)
+        surface.blit(rendered, (rect.left + padding, rect.top + 5))
+
+    def _tooltip_text(self, mouse_pos: tuple[int, int]) -> str | None:
+        for button in self.buttons:
+            if button.rect.collidepoint(mouse_pos):
+                return self._button_tooltips().get(button.action)
+        for slider in self.sliders:
+            if slider.rect.inflate(0, 24).collidepoint(mouse_pos):
+                if slider.action.startswith("parameter:"):
+                    return self._parameter_tooltip(slider.label)
+                return self._slider_tooltips().get(slider.action)
+        return None
+
+    def _button_tooltips(self) -> dict[str, str]:
+        return {
+            "pause": "Pause or resume simulation",
+            "reset": "Restart current trajectory",
+            "defaults": "Restore current preset defaults",
+            "save_midi": "Record/export generated notes to MIDI",
+            "bifurcation": "Save Logistic bifurcation diagram",
+            "chaos": "Toggle Lyapunov chaos influence",
+            "scale": "Cycle musical scale",
+            "auto_camera": "Rotate camera automatically",
+            "visual_style": "Cycle color palette",
+            "multi_voice": "Toggle extra musical voices",
+            "performance": "Hide GUI for performance view",
+        }
+
+    def _slider_tooltips(self) -> dict[str, str]:
+        return {
+            "root_note": "Tone center: shifts all notes up/down",
+            "density": "How often note events are allowed",
+            "bpm": "Tempo: affects note spacing and durations",
+            "note_length": "Multiplier for note duration",
+            "octave_range": "Pitch range in octaves",
+            "note_probability": "Chance that a generated note is played",
+            "swing": "Offsets/lengthens every second note",
+            "speed": "Simulation steps per frame",
+            "trail_limit": "Number of trajectory points on screen",
+            "chaos_influence": "How strongly chaos affects music density",
+        }
+
+    def _parameter_tooltip(self, label: str) -> str | None:
+        return {
+            "sigma": "Lorenz: x-y coupling speed",
+            "rho": "Lorenz: convection/chaos intensity",
+            "beta": "Lorenz: vertical damping",
+            "a": "System coefficient shaping the attractor",
+            "b": "System coefficient shaping feedback",
+            "c": "Rossler: spiral height/chaos control",
+            "r": "Logistic: growth parameter",
+            "r_step": "Logistic: how fast r advances",
+        }.get(label)
 
     def _short_scale(self, scale_name: str) -> str:
         names = {

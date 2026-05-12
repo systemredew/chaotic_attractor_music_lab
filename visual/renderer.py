@@ -30,6 +30,7 @@ class Renderer:
         self.trail: deque[tuple[Array, float, float]] = deque(maxlen=config.TRAIL_LIMIT)
         self.pulse_power = 0.0
         self.dragging_camera = False
+        self.panning_camera = False
         self.trail_limit = config.TRAIL_LIMIT
         self.performance_mode = False
         self.visual_style = config.VISUAL_STYLES[0]
@@ -99,14 +100,24 @@ class Renderer:
             if action is not None:
                 return action
 
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.visual_rect.collidepoint(event.pos):
-            self.dragging_camera = True
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.dragging_camera = False
+        if event.type == pygame.MOUSEBUTTONDOWN and self.visual_rect.collidepoint(event.pos):
+            if event.button == 1:
+                self.dragging_camera = True
+            elif event.button == 2:
+                self.panning_camera = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                self.dragging_camera = False
+            elif event.button == 2:
+                self.panning_camera = False
         elif event.type == pygame.MOUSEMOTION and self.dragging_camera:
             dx, dy = event.rel
             self.camera.rotate(dx * 0.008, dy * 0.008)
             return "camera_drag", None
+        elif event.type == pygame.MOUSEMOTION and self.panning_camera:
+            dx, dy = event.rel
+            self.camera.pan(dx, dy)
+            return "camera_pan", None
         elif event.type == pygame.MOUSEWHEEL and self.visual_rect.collidepoint(pygame.mouse.get_pos()):
             self.camera.adjust_zoom(event.y * 0.8)
             return None
@@ -149,17 +160,13 @@ class Renderer:
         self._draw_3d_trail(system_name)
         self.screen.set_clip(None)
 
-        status = "PAUSED" if paused else "RUNNING"
-        sound = "MUTED" if muted else "LIVE"
         lines = [
-            "Chaotic Attractor Music Lab",
-            f"{preset_name} | {system_name} | {status} | {sound}",
             f"params: {params}",
             f"lyapunov: {lyapunov:+.4f} | scale: {scale_name} | note: {current_note or '-'} | fps: {fps:.1f}",
             f"speed: {steps_per_frame} | density: {density_multiplier:.2f} | root: {root_note} | chaos influence: {chaos_influence:.2f} | trail: {trail_limit}",
         ]
         if performance_mode:
-            self.overlay.draw(self.screen, lines[:2])
+            self.overlay.draw(self.screen, lines[:1])
         else:
             self.overlay.draw(self.screen, lines)
         self.controls.draw(

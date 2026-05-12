@@ -16,6 +16,8 @@ class Camera:
     rotation_x: float = 0.65
     rotation_y: float = -0.55
     zoom: float = 9.6
+    offset_x: float = 0.0
+    offset_y: float = 0.0
 
     def project(self, point3d: Array) -> tuple[int, int]:
         screen_x, screen_y, _depth = self.project_with_depth(point3d)
@@ -29,8 +31,8 @@ class Camera:
         zz = -x * sy + z * cy
         yz = y * cx - zz * sx
         depth = y * sx + zz * cx
-        screen_x = int(self.width * 0.5 + xz * self.zoom)
-        screen_y = int(self.height * 0.53 - yz * self.zoom)
+        screen_x = int(self.width * 0.5 + self.offset_x + xz * self.zoom)
+        screen_y = int(self.height * 0.53 + self.offset_y - yz * self.zoom)
         return screen_x, screen_y, float(depth)
 
     def rotate(self, delta_x: float, delta_y: float) -> None:
@@ -39,3 +41,7 @@ class Camera:
 
     def adjust_zoom(self, delta: float) -> None:
         self.zoom = float(np.clip(self.zoom + delta, config.MIN_CAMERA_ZOOM, config.MAX_CAMERA_ZOOM))
+
+    def pan(self, delta_x: float, delta_y: float) -> None:
+        self.offset_x += delta_x
+        self.offset_y += delta_y
